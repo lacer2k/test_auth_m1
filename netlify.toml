@@ -1,22 +1,8 @@
 [build]
 publish = "."
-command = """
-set -e
-echo 'window.ENV = { AUTH0_DOMAIN: \"'$AUTH0_DOMAIN'\", AUTH0_CLIENT_ID: \"'$AUTH0_CLIENT_ID'\" };' > env.js
-sed -i 's/{{AUTH0_DOMAIN}}/'"$AUTH0_DOMAIN"'/g' index.html || true
-sed -i 's/{{AUTH0_CLIENT_ID}}/'"$AUTH0_CLIENT_ID"'/g' index.html || true
-"""
-
-[build.processing]
-  skip_processing = false
-
-[build.processing.html]
-  pretty_urls = true
+functions = "netlify/functions"
 
 [[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
-
-[context.production.environment]
-NODE_ENV = "production"
