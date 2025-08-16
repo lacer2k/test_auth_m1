@@ -4,9 +4,13 @@ functions = "netlify/functions"
 command = """
 set -e
 mkdir -p vendor
-echo 'Fetching Auth0 SPA SDK locally…'
+echo 'Downloading Auth0 SPA SDK locally…'
 curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.js \
   -o vendor/auth0-spa-js.production.js
+curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js \
+  -o vendor/auth0-spa-js.production.esm.js
+echo 'SDK files in vendor/:'
+ls -l vendor
 """
 
 [[redirects]]
