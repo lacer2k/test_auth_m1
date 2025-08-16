@@ -1,403 +1,242 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="auth0-domain" content="AUTH0_DOMAIN_PLACEHOLDER">
-    <meta name="auth0-client-id" content="AUTH0_CLIENT_ID_PLACEHOLDER">
-    <title>Secure Time Portal</title>
-    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+  <!-- Netlify replaces these at build time via sed -->
+  <meta name="auth0-domain" content="{{AUTH0_DOMAIN}}" />
+  <meta name="auth0-client-id" content="{{AUTH0_CLIENT_ID}}" />
 
-```
+  <title>Secure Time Portal</title>
+  <link rel="preconnect" href="https://cdn.auth0.com" crossorigin>
+  <script
+    src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"
+    defer
+  ></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
     body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        color: white;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh; display:flex; justify-content:center; align-items:center; color:#fff;
     }
-
     .container {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 3rem;
-        text-align: center;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        max-width: 500px;
-        width: 90%;
+      background: rgba(255,255,255,.1); backdrop-filter: blur(10px);
+      border-radius: 20px; padding: 3rem; text-align:center;
+      box-shadow: 0 20px 40px rgba(0,0,0,.1);
+      border: 1px solid rgba(255,255,255,.2); max-width: 500px; width: 90%;
     }
-
     .logo {
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin-bottom: 1rem;
-        background: linear-gradient(45deg, #fff, #e0e7ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+      font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem;
+      background: linear-gradient(45deg, #fff, #e0e7ff);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
-
-    .subtitle {
-        font-size: 1.1rem;
-        margin-bottom: 2rem;
-        opacity: 0.9;
-    }
-
-    .login-section {
-        margin-bottom: 2rem;
-    }
-
+    .subtitle { font-size: 1.1rem; margin-bottom: 2rem; opacity:.9; }
+    .login-section { margin-bottom: 2rem; }
     .btn {
-        background: linear-gradient(45deg, #4f46e5, #7c3aed);
-        color: white;
-        border: none;
-        padding: 1rem 2rem;
-        font-size: 1.1rem;
-        border-radius: 50px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      background: linear-gradient(45deg, #4f46e5, #7c3aed);
+      color:#fff; border:0; padding:1rem 2rem; font-size:1.1rem;
+      border-radius: 50px; cursor:pointer; transition: transform .2s ease, box-shadow .2s ease;
+      text-decoration:none; display:inline-block;
+      box-shadow: 0 10px 20px rgba(0,0,0,.2);
     }
-
-    .btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
-    }
-
-    .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-    }
-
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(0,0,0,.3); }
+    .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
     .time-display {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 15px;
-        padding: 2rem;
-        margin-top: 2rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255,255,255,.15); border-radius: 15px; padding: 2rem; margin-top: 2rem;
+      border: 1px solid rgba(255,255,255,.2);
     }
-
-    .current-time {
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .date-display {
-        font-size: 1.2rem;
-        opacity: 0.8;
-        margin-bottom: 1rem;
-    }
-
-    .welcome-message {
-        font-size: 1.3rem;
-        margin-bottom: 1rem;
-        color: #e0e7ff;
-    }
-
-    .user-info {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        font-size: 0.9rem;
-    }
-
-    .loading {
-        display: none;
-        font-size: 1.1rem;
-        margin: 1rem 0;
-    }
-
-    .spinner {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top-color: white;
-        animation: spin 1s ease-in-out infinite;
-        margin-right: 10px;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    .error {
-        background: rgba(239, 68, 68, 0.2);
-        border: 1px solid rgba(239, 68, 68, 0.5);
-        color: #fecaca;
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-    }
-
-    .logout-btn {
-        background: rgba(239, 68, 68, 0.8);
-        font-size: 0.9rem;
-        padding: 0.5rem 1rem;
-        margin-top: 1rem;
-    }
-
-    .logout-btn:hover {
-        background: rgba(239, 68, 68, 1);
-    }
-
+    .current-time { font-size: 3rem; font-weight: 800; margin-bottom:.5rem; text-shadow: 0 2px 4px rgba(0,0,0,.3); }
+    .date-display { font-size:1.2rem; opacity:.8; margin-bottom:1rem; }
+    .welcome-message { font-size:1.3rem; margin-bottom:1rem; color:#e0e7ff; }
+    .user-info { background: rgba(255,255,255,.1); border-radius:10px; padding:1rem; margin-bottom:1rem; font-size:.95rem; text-align:left; }
+    .loading { display:none; font-size:1.1rem; margin:1rem 0; }
+    .spinner { display:inline-block; width:20px; height:20px; border:2px solid rgba(255,255,255,.3); border-radius:50%; border-top-color:#fff; animation: spin 1s ease-in-out infinite; margin-right:10px; vertical-align:-4px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { background: rgba(239,68,68,.2); border:1px solid rgba(239,68,68,.5); color:#fecaca; padding:1rem; border-radius:10px; margin:1rem 0; display:none; text-align:left; }
+    .logout-btn { background: rgba(239,68,68,.85); font-size:.95rem; padding:.6rem 1.1rem; margin-top:1rem; }
+    .logout-btn:hover { background: rgba(239,68,68,1); }
     @media (max-width: 600px) {
-        .container {
-            padding: 2rem;
-        }
-        
-        .current-time {
-            font-size: 2rem;
-        }
-        
-        .logo {
-            font-size: 2rem;
-        }
+      .container { padding:2rem; }
+      .current-time { font-size:2rem; }
+      .logo { font-size:2rem; }
     }
-</style>
-```
-
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">⏰ TimePortal</div>
-        <div class="subtitle">Secure access to current time</div>
+  <noscript>This app requires JavaScript.</noscript>
 
-```
+  <div class="container">
+    <div class="logo">⏰ TimePortal</div>
+    <div class="subtitle">Secure access to current time</div>
+
     <div id="loading" class="loading">
-        <div class="spinner"></div>
-        Initializing...
+      <span class="spinner"></span> Initializing…
     </div>
-    
-    <div id="error" class="error" style="display: none;"></div>
-    
-    <div id="login-section" class="login-section" style="display: none;">
-        <p>Please authenticate to access the current time</p>
-        <br>
-        <button id="login-btn" class="btn">🔐 Login with Auth0</button>
-    </div>
-    
-    <div id="authenticated-section" style="display: none;">
-        <div class="welcome-message">Welcome back!</div>
-        <div id="user-info" class="user-info"></div>
-        
-        <div class="time-display">
-            <div id="current-time" class="current-time">--:--:--</div>
-            <div id="current-date" class="date-display">Loading...</div>
-            <div style="font-size: 0.9rem; opacity: 0.7;">Live time updates every second</div>
-        </div>
-        
-        <button id="logout-btn" class="btn logout-btn">🚪 Logout</button>
-    </div>
-</div>
 
-<script>
+    <div id="error" class="error" role="alert"></div>
+
+    <div id="login-section" class="login-section" style="display:none;">
+      <p>Please authenticate to access the current time</p>
+      <br />
+      <button id="login-btn" class="btn" type="button">🔐 Login with Auth0</button>
+    </div>
+
+    <div id="authenticated-section" style="display:none;">
+      <div class="welcome-message">Welcome back!</div>
+      <div id="user-info" class="user-info">
+        <div><strong>👤 <span id="user-name">—</span></strong></div>
+        <div>📧 <span id="user-email">—</span></div>
+      </div>
+
+      <div class="time-display">
+        <div id="current-time" class="current-time">--:--:--</div>
+        <div id="current-date" class="date-display">Loading…</div>
+        <div style="font-size:.9rem; opacity:.7;">Live time updates every second</div>
+      </div>
+
+      <button id="logout-btn" class="btn logout-btn" type="button">🚪 Logout</button>
+    </div>
+  </div>
+
+  <script>
     let auth0Client = null;
     let timeInterval = null;
 
-    // Auth0 configuration using Netlify environment variables
-    // These will be injected at build time
+    // Build-time injected config via meta tags (Netlify sed)
+    const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
     const auth0Config = {
-        domain: window.ENV?.AUTH0_DOMAIN || 'AUTH0_DOMAIN_PLACEHOLDER',
-        clientId: window.ENV?.AUTH0_CLIENT_ID || 'AUTH0_CLIENT_ID_PLACEHOLDER',
-        authorizationParams: {
-            redirect_uri: window.location.origin,
-            scope: 'openid profile email'
-        }
+      domain: meta('auth0-domain') || 'AUTH0_DOMAIN_PLACEHOLDER',
+      clientId: meta('auth0-client-id') || 'AUTH0_CLIENT_ID_PLACEHOLDER',
+      authorizationParams: {
+        redirect_uri: window.location.origin,
+        scope: 'openid profile email'
+      }
     };
 
-    // Fallback: try to get from meta tags if window.ENV is not available
-    if (auth0Config.domain === 'AUTH0_DOMAIN_PLACEHOLDER') {
-        const domainMeta = document.querySelector('meta[name="auth0-domain"]');
-        const clientIdMeta = document.querySelector('meta[name="auth0-client-id"]');
-        
-        if (domainMeta && clientIdMeta) {
-            auth0Config.domain = domainMeta.content;
-            auth0Config.clientId = clientIdMeta.content;
-        }
-    }
-
-    // DOM elements
+    // DOM refs
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
     const loginSection = document.getElementById('login-section');
     const authenticatedSection = document.getElementById('authenticated-section');
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
-    const userInfoEl = document.getElementById('user-info');
+    const userNameEl = document.getElementById('user-name');
+    const userEmailEl = document.getElementById('user-email');
     const currentTimeEl = document.getElementById('current-time');
     const currentDateEl = document.getElementById('current-date');
 
-    // Check authentication status using Auth0
-    async function initializeAuth0() {
-        try {
-            loadingEl.style.display = 'block';
-            
-            auth0Client = await createAuth0Client(auth0Config);
-            
-            // Handle the redirect callback
-            if (window.location.search.includes('code=') || window.location.search.includes('error=')) {
-                await auth0Client.handleRedirectCallback();
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-            
-            // Check if user is authenticated
-            const isAuthenticated = await auth0Client.isAuthenticated();
-            
-            if (isAuthenticated) {
-                const user = await auth0Client.getUser();
-                showAuthenticatedContent(user);
-            } else {
-                showLoginContent();
-            }
-            
-        } catch (error) {
-            console.error('Auth0 initialization error:', error);
-            showError('Failed to initialize authentication. Please check your Auth0 configuration.');
-        } finally {
-            loadingEl.style.display = 'none';
-        }
-    }
-
-    // Show login interface
-    function showLoginContent() {
-        loginSection.style.display = 'block';
-        authenticatedSection.style.display = 'none';
-    }
-
-    // Show authenticated content
-    function showAuthenticatedContent(user) {
-        try {
-            // Display user info
-            userInfoEl.innerHTML = `
-                <strong>👤 ${user.name || user.email}</strong><br>
-                📧 ${user.email}
-            `;
-            
-            loginSection.style.display = 'none';
-            authenticatedSection.style.display = 'block';
-            
-            // Start the time display
-            startTimeDisplay();
-            
-        } catch (error) {
-            console.error('Error displaying user info:', error);
-            showError('Failed to display user information.');
-        }
-    }
-
-    // Start real-time clock
-    function startTimeDisplay() {
-        function updateTime() {
-            const now = new Date();
-            
-            // Format time
-            const timeOptions = {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-                timeZone: 'Europe/Rome' // Italian timezone
-            };
-            
-            // Format date
-            const dateOptions = {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                timeZone: 'Europe/Rome'
-            };
-            
-            const timeString = now.toLocaleTimeString('it-IT', timeOptions);
-            const dateString = now.toLocaleDateString('it-IT', dateOptions);
-            
-            currentTimeEl.textContent = timeString;
-            currentDateEl.textContent = dateString;
-        }
-        
-        // Update immediately and then every second
-        updateTime();
-        timeInterval = setInterval(updateTime, 1000);
-    }
-
-    // Stop time display
-    function stopTimeDisplay() {
-        if (timeInterval) {
-            clearInterval(timeInterval);
-            timeInterval = null;
-        }
-    }
-
-    // Show error message
     function showError(message) {
-        errorEl.textContent = message;
-        errorEl.style.display = 'block';
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
+    function hideError() { errorEl.style.display = 'none'; }
+
+    function showLogin() {
+      loginSection.style.display = 'block';
+      authenticatedSection.style.display = 'none';
+    }
+    function showAuthed(user) {
+      userNameEl.textContent = user?.name || user?.email || 'User';
+      userEmailEl.textContent = user?.email || '';
+      loginSection.style.display = 'none';
+      authenticatedSection.style.display = 'block';
+      startClock();
     }
 
-    // Hide error message
-    function hideError() {
-        errorEl.style.display = 'none';
+    function startClock() {
+      const updateTime = () => {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('it-IT', {
+          hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false, timeZone:'Europe/Rome'
+        });
+        const dateString = now.toLocaleDateString('it-IT', {
+          weekday:'long', year:'numeric', month:'long', day:'numeric', timeZone:'Europe/Rome'
+        });
+        currentTimeEl.textContent = timeString;
+        currentDateEl.textContent = dateString;
+      };
+      updateTime();
+      timeInterval = setInterval(updateTime, 1000);
+    }
+    function stopClock() {
+      if (timeInterval) { clearInterval(timeInterval); timeInterval = null; }
     }
 
-    // Login function
+    async function initializeAuth0() {
+      loadingEl.style.display = 'block';
+      hideError();
+
+      if (!auth0Config.domain || auth0Config.domain.includes('PLACEHOLDER') ||
+          !auth0Config.clientId || auth0Config.clientId.includes('PLACEHOLDER')) {
+        showError('Auth0 config missing. Ensure AUTH0_DOMAIN and AUTH0_CLIENT_ID are injected.');
+        loadingEl.style.display = 'none';
+        showLogin();
+        return;
+      }
+
+      try {
+        auth0Client = await createAuth0Client(auth0Config);
+
+        // Handle redirect
+        const hasRedirectParams = window.location.search.includes('code=') ||
+                                  window.location.search.includes('error=');
+        if (hasRedirectParams) {
+          try {
+            await auth0Client.handleRedirectCallback();
+          } finally {
+            // Clean query string
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+
+        const isAuthenticated = await auth0Client.isAuthenticated();
+        if (isAuthenticated) {
+          const user = await auth0Client.getUser();
+          showAuthed(user);
+        } else {
+          showLogin();
+        }
+      } catch (e) {
+        console.error('Auth0 init error:', e);
+        showError('Failed to initialize authentication. Check your Auth0 settings and callback URL.');
+        showLogin();
+      } finally {
+        loadingEl.style.display = 'none';
+      }
+    }
+
     async function login() {
-        try {
-            hideError();
-            loginBtn.disabled = true;
-            loginBtn.textContent = '🔄 Logging in...';
-            
-            await auth0Client.loginWithRedirect();
-            
-        } catch (error) {
-            console.error('Login error:', error);
-            showError('Login failed. Please try again.');
-            loginBtn.disabled = false;
-            loginBtn.textContent = '🔐 Login with Auth0';
-        }
+      try {
+        hideError();
+        loginBtn.disabled = true;
+        loginBtn.textContent = '🔄 Logging in…';
+        await auth0Client.loginWithRedirect();
+      } catch (e) {
+        console.error('Login error:', e);
+        showError('Login failed. Please try again.');
+        loginBtn.disabled = false;
+        loginBtn.textContent = '🔐 Login with Auth0';
+      }
     }
 
-    // Logout function
     async function logout() {
-        try {
-            stopTimeDisplay();
-            await auth0Client.logout({
-                logoutParams: {
-                    returnTo: window.location.origin
-                }
-            });
-        } catch (error) {
-            console.error('Logout error:', error);
-            showError('Logout failed. Please try again.');
-        }
+      try {
+        stopClock();
+        await auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+      } catch (e) {
+        console.error('Logout error:', e);
+        showError('Logout failed. Please try again.');
+      }
     }
 
-    // Event listeners
     loginBtn.addEventListener('click', login);
     logoutBtn.addEventListener('click', logout);
-
-    // Initialize when page loads
     document.addEventListener('DOMContentLoaded', initializeAuth0);
-</script>
-```
-
+  </script>
 </body>
 </html>
