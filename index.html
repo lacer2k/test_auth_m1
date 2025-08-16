@@ -2,134 +2,47 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 Login + Management API (Netlify)</title>
-
-  <!-- Minimal CSP that won’t block our local SDK -->
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 script-src 'self' 'unsafe-inline';
-                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com;
-                 style-src 'self' 'unsafe-inline';
-                 img-src 'self' data:;
-                 frame-src https://*.auth0.com;">
-
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
-    button { padding: .6rem 1rem; margin-right: .5rem; }
-    pre { background: #0b1020; color: #c9f7ff; padding: 12px; border-radius: 8px; max-width: 1000px; overflow:auto; }
-    .muted { opacity:.7; }
-  </style>
-
-  <!-- Load local UMD build -->
-  <script src="/vendor/auth0-spa-js.production.js"></script>
-
-  <!-- ESM fallback -->
+  <title>Redirecting to Auth0…</title>
   <script type="module">
-    if (typeof window.createAuth0Client !== 'function') {
-      import('/vendor/auth0-spa-js.production.esm.js').then(mod => {
-        if (typeof mod.createAuth0Client === 'function') {
-          window.createAuth0Client = mod.createAuth0Client;
-          console.log('[Auth0] Loaded ESM fallback');
-        } else {
-          console.error('[Auth0] ESM fallback loaded but no createAuth0Client export');
-        }
-      }).catch(err => console.error('[Auth0] Failed to load ESM fallback:', err));
-    } else {
-      console.log('[Auth0] Loaded UMD SDK');
-    }
-  </script>
-</head>
-<body>
-  <h1>Auth0 Login</h1>
-  <p class="muted">SPA → Netlify Function → Auth0 Management API</p>
+    import { createAuth0Client } from '/vendor/auth0-spa-js.production.esm.js';
 
-  <p><strong>Status:</strong> <span id="status">Booting…</span></p>
-  <p>
-    <button id="login">Login</button>
-    <button id="logout" disabled>Logout</button>
-    <button id="me" disabled>Get profile (via Management API)</button>
-    <button id="selftest">Run server self-test</button>
-  </p>
-  <pre id="out">Ready.</pre>
-
-  <script>
-    // === SPA config (public SPA app) ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
 
-    const $ = (id) => document.getElementById(id);
-    const log = (x) => { $("out").textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2); };
-    const setStatus = (s) => $("status").textContent = s;
+    async function go() {
+      const auth0 = await createAuth0Client({
+        domain: DOMAIN,
+        clientId: CLIENT_ID,
+        authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
+      });
 
-    let auth0Client = null;
+      const qs = new URLSearchParams(window.location.search);
 
-    async function init() {
-      // Give ESM fallback a tick to attach
-      if (typeof window.createAuth0Client !== "function") {
-        await new Promise(r => setTimeout(r, 50));
-      }
-      if (typeof window.createAuth0Client !== "function") {
-        setStatus("SDK not loaded");
-        log("SDK non caricato da /vendor: apri Network e verifica che /vendor/auth0-spa-js.production.js sia 200. Se 404, controlla netlify.toml build command e che il deploy sia riuscito.");
-        return;
+      // Handle callback (after Auth0 redirects back)
+      if (qs.has("code") || qs.has("error")) {
+        try { await auth0.handleRedirectCallback(); }
+        finally { history.replaceState({}, document.title, window.location.pathname); }
       }
 
-      try {
-        auth0Client = await window.createAuth0Client({
-          domain: DOMAIN,
-          clientId: CLIENT_ID,
-          authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
-        });
-
-        const qs = new URLSearchParams(window.location.search);
-        if (qs.has("code") || qs.has("error")) {
-          try { await auth0Client.handleRedirectCallback(); }
-          finally { history.replaceState({}, document.title, window.location.pathname); }
-        }
-
-        const authed = await auth0Client.isAuthenticated();
-        $("logout").disabled = !authed;
-        $("me").disabled = !authed;
-
-        if (authed) {
-          const user = await auth0Client.getUser();
-          setStatus("Logged in");
-          log({ status: "logged-in", user });
-        } else {
-          setStatus("Not authenticated");
-          log("Click Login to authenticate.");
-        }
-      } catch (e) {
-        setStatus("Init failed");
-        log(e);
+      const authed = await auth0.isAuthenticated();
+      if (!authed) {
+        // 🚀 Immediately send to Auth0 login
+        await auth0.loginWithRedirect();
+      } else {
+        // Already logged in → show user profile
+        const user = await auth0.getUser();
+        document.body.innerHTML = `
+          <h1>Welcome, ${user.name}</h1>
+          <pre>${JSON.stringify(user, null, 2)}</pre>
+        `;
       }
     }
 
-    $("login").onclick  = () => auth0Client.loginWithRedirect();
-    $("logout").onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-    $("me").onclick     = async () => {
-      try {
-        const claims = await auth0Client.getIdTokenClaims();
-        const sub = claims?.sub;
-        if (!sub) return log("No sub in ID token; fai login prima.");
-        setStatus("Fetching profile via function…");
-        const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(sub));
-        const text = await res.text();
-        try { log(JSON.parse(text)); } catch { log(text); }
-        setStatus("Done");
-      } catch (e) { log(e); setStatus("Error"); }
-    };
-
-    $("selftest").onclick = async () => {
-      setStatus("Running self-test…");
-      const res = await fetch("/.netlify/functions/mgmt-selftest");
-      const txt = await res.text();
-      try { log(JSON.parse(txt)); } catch { log(txt); }
-      setStatus("Self-test done");
-    };
-
-    document.addEventListener("DOMContentLoaded", init);
+    go();
   </script>
+</head>
+<body>
+  <p>Redirecting you to login…</p>
 </body>
 </html>
