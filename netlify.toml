@@ -1,16 +1,17 @@
 [build]
+publish = "."
 command = """
-echo 'Processing environment variables…' &&
+echo "AUTH0_DOMAIN=$AUTH0_DOMAIN"
+echo "AUTH0_CLIENT_ID=$AUTH0_CLIENT_ID"
+# Replace placeholders in the built file that will be served
 sed -i 's/{{AUTH0_DOMAIN}}/'"$AUTH0_DOMAIN"'/g' index.html &&
 sed -i 's/{{AUTH0_CLIENT_ID}}/'"$AUTH0_CLIENT_ID"'/g' index.html
 """
-publish = "."
 
 [build.processing]
-skip_processing = false
-
+  skip_processing = false
 [build.processing.html]
-pretty_urls = true
+  pretty_urls = true
 
 [[redirects]]
 from = "/*"
