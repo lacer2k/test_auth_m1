@@ -112,6 +112,3 @@ mgmt-user.js
 
 MIT
 
----
-
-Would you like me to also make you a **short `mgmt-selftest.md` doc** explaining how to hit that function manually (`curl` example), or do you want to keep the README lean?
