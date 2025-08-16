@@ -3,14 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <title>Auth0 Login + Management API (Netlify)</title>
-  <!-- Carica l’SDK Auth0 PRIMA del tuo codice -->
-  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
+
+  <!-- Content Security Policy: allow our domain + Auth0 CDNs -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' https://cdn.auth0.com https://unpkg.com 'unsafe-inline';
+                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.auth0.com https://*.netlify.app;
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data: https:;
+                 frame-src https://*.auth0.com;">
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
     button { padding: .6rem 1rem; margin-right: .5rem; }
     pre { background: #0b1020; color: #c9f7ff; padding: 12px; border-radius: 8px; max-width: 1000px; overflow:auto; }
     .muted { opacity:.7; }
   </style>
+
+  <!-- Load Auth0 SDK FIRST (no defer/async). Add fallback if it fails -->
+  <script>
+    function loadAuth0Fallback(){
+      console.warn('[Auth0] Primary SDK failed, loading fallback from unpkg…');
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.js';
+      s.onload = () => console.log('[Auth0] Fallback SDK loaded');
+      s.onerror = () => console.error('[Auth0] Fallback SDK failed to load');
+      document.head.appendChild(s);
+    }
+  </script>
+  <script id="auth0-sdk"
+          src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"
+          onload="console.log('[Auth0] SDK loaded')"
+          onerror="loadAuth0Fallback()"></script>
 </head>
 <body>
   <h1>Auth0 Login</h1>
@@ -26,20 +49,23 @@
   <pre id="out">Ready.</pre>
 
   <script>
-    // === Config SPA (Client ID pubblico della tua SPA) ===
+    // === Config SPA (public SPA Client ID) ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
 
-    let auth0Client = null;
     const $ = (id) => document.getElementById(id);
     const log = (x) => { $("out").textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2); };
     const setStatus = (s) => $("status").textContent = s;
 
-    async function init() {
+    let auth0Client = null;
+
+    async function safeInit() {
+      // Verify SDK presence
       if (typeof createAuth0Client !== "function") {
+        console.error("[Auth0] SDK not available (createAuth0Client undefined).");
         setStatus("SDK not loaded");
-        log("Auth0 SDK non caricato: controlla lo script tag nell’<head>.");
+        log("Auth0 SDK non caricato: controlla rete, CSP o estensioni/AdBlock. Vedi Network tab per il file auth0-spa-js.production.js.");
         return;
       }
 
@@ -69,15 +95,15 @@
           log("Click Login to authenticate.");
         }
       } catch (e) {
+        console.error("[Auth0] init error:", e);
         setStatus("Init failed");
         log(e);
       }
     }
 
-    $("login").onclick = () => auth0Client.loginWithRedirect();
+    $("login").onclick  = () => auth0Client.loginWithRedirect();
     $("logout").onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-
-    $("me").onclick = async () => {
+    $("me").onclick     = async () => {
       try {
         const claims = await auth0Client.getIdTokenClaims();
         const sub = claims?.sub;
@@ -90,7 +116,6 @@
       } catch (e) { log(e); setStatus("Error"); }
     };
 
-    // Nuovo: self-test server
     $("selftest").onclick = async () => {
       setStatus("Running self-test…");
       const res = await fetch("/.netlify/functions/mgmt-selftest");
@@ -99,7 +124,11 @@
       setStatus("Self-test done");
     };
 
-    init();
+    // Wait a tick so the SDK <script> can execute, then init
+    document.addEventListener("DOMContentLoaded", () => {
+      // small delay to ensure onload executed if needed
+      setTimeout(safeInit, 0);
+    });
   </script>
 </body>
 </html>
