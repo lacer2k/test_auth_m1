@@ -107,6 +107,9 @@
     let auth0Client = null;
     let timeInterval = null;
 
+		<script src="/env.js"></script>
+
+
     // Build-time injected config via meta tags (Netlify sed)
     const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
     const auth0Config = {
