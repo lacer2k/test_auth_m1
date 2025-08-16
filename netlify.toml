@@ -1,14 +1,27 @@
 [build]
 publish = "."
 command = """
-echo Injecting Auth0 vars...
-sed -i 's/{{AUTH0_DOMAIN}}/'"$AUTH0_DOMAIN"'/g' index.html &&
-sed -i 's/{{AUTH0_CLIENT_ID}}/'"$AUTH0_CLIENT_ID"'/g' index.html
+set -e
+
+echo 'Creating env.js from Netlify env vars…'
+cat > env.js <<'EOF'
+window.ENV = {
+  AUTH0_DOMAIN: "${AUTH0_DOMAIN}",
+  AUTH0_CLIENT_ID: "${AUTH0_CLIENT_ID}"
+};
+EOF
+
+# Optional: also replace the meta placeholders in index.html so View Source shows real values
+sed -i 's/{{AUTH0_DOMAIN}}/'"$AUTH0_DOMAIN"'/g' index.html || true
+sed -i 's/{{AUTH0_CLIENT_ID}}/'"$AUTH0_CLIENT_ID"'/g' index.html || true
+
+# Quick sanity output (length only, no secrets in logs)
+echo "Injected AUTH0_DOMAIN length: ${#AUTH0_DOMAIN}"
+echo "Injected AUTH0_CLIENT_ID length: ${#AUTH0_CLIENT_ID}"
 """
 
 [build.processing]
   skip_processing = false
-
 [build.processing.html]
   pretty_urls = true
 
