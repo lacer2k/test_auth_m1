@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Time Portal</title>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
     <style>
         * {
             margin: 0;
@@ -208,7 +208,21 @@
 </div>
 
 <script>
+    let auth0Client = null;
     let timeInterval = null;
+
+    // Auth0 configuration - Get these from your Netlify site's environment variables
+    // Or replace with your actual values
+    const auth0Config = {
+        domain: window.location.hostname.includes('netlify.app') 
+            ? `${window.location.hostname.split('.')[0]}.auth0.com` 
+            : 'YOUR_AUTH0_DOMAIN.auth0.com',
+        clientId: 'YOUR_AUTH0_CLIENT_ID', // Replace with your actual Client ID
+        authorizationParams: {
+            redirect_uri: window.location.origin,
+            scope: 'openid profile email'
+        }
+    };
 
     // DOM elements
     const loadingEl = document.getElementById('loading');
@@ -221,23 +235,32 @@
     const currentTimeEl = document.getElementById('current-time');
     const currentDateEl = document.getElementById('current-date');
 
-    // Check authentication status using Netlify Identity
-    function checkAuthStatus() {
+    // Check authentication status using Auth0
+    async function initializeAuth0() {
         try {
             loadingEl.style.display = 'block';
             
-            // Check if user is logged in via Netlify Identity
-            const user = netlifyIdentity.currentUser();
+            auth0Client = await createAuth0Client(auth0Config);
             
-            if (user) {
+            // Handle the redirect callback
+            if (window.location.search.includes('code=') || window.location.search.includes('error=')) {
+                await auth0Client.handleRedirectCallback();
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            // Check if user is authenticated
+            const isAuthenticated = await auth0Client.isAuthenticated();
+            
+            if (isAuthenticated) {
+                const user = await auth0Client.getUser();
                 showAuthenticatedContent(user);
             } else {
                 showLoginContent();
             }
             
         } catch (error) {
-            console.error('Authentication check error:', error);
-            showError('Failed to check authentication status.');
+            console.error('Auth0 initialization error:', error);
+            showError('Failed to initialize authentication. Please check your Auth0 configuration.');
         } finally {
             loadingEl.style.display = 'none';
         }
@@ -254,7 +277,7 @@
         try {
             // Display user info
             userInfoEl.innerHTML = `
-                <strong>👤 ${user.user_metadata?.full_name || user.email}</strong><br>
+                <strong>👤 ${user.name || user.email}</strong><br>
                 📧 ${user.email}
             `;
             
@@ -325,13 +348,13 @@
     }
 
     // Login function
-    function login() {
+    async function login() {
         try {
             hideError();
             loginBtn.disabled = true;
             loginBtn.textContent = '🔄 Logging in...';
             
-            netlifyIdentity.open();
+            await auth0Client.loginWithRedirect();
             
         } catch (error) {
             console.error('Login error:', error);
@@ -342,34 +365,18 @@
     }
 
     // Logout function
-    function logout() {
+    async function logout() {
         try {
             stopTimeDisplay();
-            netlifyIdentity.logout();
+            await auth0Client.logout({
+                logoutParams: {
+                    returnTo: window.location.origin
+                }
+            });
         } catch (error) {
             console.error('Logout error:', error);
             showError('Logout failed. Please try again.');
         }
-    }
-
-    // Initialize Netlify Identity
-    function initializeNetlifyIdentity() {
-        // Initialize Netlify Identity
-        netlifyIdentity.init();
-        
-        // Listen for authentication events
-        netlifyIdentity.on('login', user => {
-            showAuthenticatedContent(user);
-            netlifyIdentity.close();
-        });
-        
-        netlifyIdentity.on('logout', () => {
-            showLoginContent();
-            stopTimeDisplay();
-        });
-        
-        // Check initial auth status
-        checkAuthStatus();
     }
 
     // Event listeners
@@ -377,7 +384,7 @@
     logoutBtn.addEventListener('click', logout);
 
     // Initialize when page loads
-    document.addEventListener('DOMContentLoaded', initializeNetlifyIdentity);
+    document.addEventListener('DOMContentLoaded', initializeAuth0);
 </script>
 ```
 
