@@ -1,46 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Auth0 Login (SPA) + Mgmt Proxy</title>
+  <meta charset="utf-8" />
+  <title>Auth0 Login + Management API</title>
+
+  <!-- Load Auth0 SDK FIRST -->
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
+
   <style>
-    body { font-family: system-ui; padding: 2rem; }
-    button { padding: .6rem 1rem; }
+    body { font-family: system-ui, sans-serif; padding: 24px; }
+    button { padding: .6rem 1rem; margin: .3rem; }
     pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; }
   </style>
 </head>
 <body>
   <h1>Auth0 Login</h1>
-  <p>SPA login via Universal Login. Then we call a Netlify Function that talks to the Management API.</p>
+  <p>Status: <span id="status">Loading…</span></p>
   <button id="login">Login</button>
   <button id="logout" disabled>Logout</button>
   <button id="me" disabled>Get profile (via Management API)</button>
   <pre id="out">Ready.</pre>
 
   <script>
-    // ---- configure your tenant/app here ----
+    // ======== SPA CONFIG ========
     const DOMAIN = 'dev-ppsnetwf.us.auth0.com';
-    const CLIENT_ID = 'v8SikCjLbbH0ioHuoKSkADBHcofOOWHj';
+    const CLIENT_ID = 'v8SikCjLbbH0ioHuoKSkADBHcofOOWHj'; // SPA app
     const REDIRECT_URI = window.location.origin + '/';
-    // ----------------------------------------
+    // ============================
 
-    let auth0Client;
-
+    let auth0Client = null;
     const $ = (id) => document.getElementById(id);
-    const log = (x) => { $('out').textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); };
+    const log = (x) => $('out').textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2);
+    const setStatus = (s) => $('status').textContent = s;
 
     async function init() {
       auth0Client = await createAuth0Client({
         domain: DOMAIN,
         clientId: CLIENT_ID,
-        authorizationParams: {
-          redirect_uri: REDIRECT_URI,
-          scope: 'openid profile email'
-        }
+        authorizationParams: { redirect_uri: REDIRECT_URI, scope: 'openid profile email' }
       });
 
-      // handle callback
       const qs = new URLSearchParams(window.location.search);
       if (qs.has('code') || qs.has('error')) {
         await auth0Client.handleRedirectCallback();
@@ -53,35 +52,25 @@
 
       if (authed) {
         const user = await auth0Client.getUser();
-        log({ status: 'logged-in', user });
+        setStatus('Logged in');
+        log(user);
       } else {
-        log('Not authenticated. Click Login.');
+        setStatus('Not authenticated');
+        log('Click Login to authenticate.');
       }
     }
 
-    $('login').onclick = async () => {
-      await auth0Client.loginWithRedirect();
-    };
-
-    $('logout').onclick = async () => {
-      await auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-    };
-
-    // Calls your serverless function, which calls the Management API with an M2M token
+    $('login').onclick = () => auth0Client.loginWithRedirect();
+    $('logout').onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
     $('me').onclick = async () => {
-      try {
-        const idTokenClaims = await auth0Client.getIdTokenClaims();
-        const sub = idTokenClaims?.sub; // e.g. "auth0|abc123"
-        if (!sub) return log('No sub in ID token.');
+      const claims = await auth0Client.getIdTokenClaims();
+      const sub = claims?.sub;
+      if (!sub) return log('No sub in ID token.');
 
-        const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(sub), {
-          headers: { 'Accept': 'application/json' }
-        });
-        const json = await res.json();
-        log(json);
-      } catch (e) {
-        log(e);
-      }
+      setStatus('Fetching from Management API…');
+      const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(sub));
+      log(await res.json());
+      setStatus('Done');
     };
 
     init();
