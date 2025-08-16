@@ -2,75 +2,62 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 Login + Management API</title>
-
-  <!-- Load Auth0 SDK FIRST -->
+  <title>Auth0 + Netlify Proxy Demo</title>
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
-
-  <style>
-    body { font-family: system-ui, sans-serif; padding: 24px; }
-    button { padding: .6rem 1rem; margin: .3rem; }
-    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; }
-  </style>
 </head>
 <body>
-  <h1>Auth0 Login</h1>
+  <h1>Auth0 Demo</h1>
   <p>Status: <span id="status">Loading…</span></p>
   <button id="login">Login</button>
   <button id="logout" disabled>Logout</button>
-  <button id="me" disabled>Get profile (via Management API)</button>
+  <button id="me" disabled>Get Profile (via Management API)</button>
   <pre id="out">Ready.</pre>
 
   <script>
-    // ======== SPA CONFIG ========
-    const DOMAIN = 'dev-ppsnetwf.us.auth0.com';
-    const CLIENT_ID = 'v8SikCjLbbH0ioHuoKSkADBHcofOOWHj'; // SPA app
-    const REDIRECT_URI = window.location.origin + '/';
-    // ============================
+    const DOMAIN = "dev-ppsnetwf.us.auth0.com";
+    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj"; // SPA app
+    const REDIRECT_URI = window.location.origin + "/";
 
     let auth0Client = null;
-    const $ = (id) => document.getElementById(id);
-    const log = (x) => $('out').textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2);
-    const setStatus = (s) => $('status').textContent = s;
+    const $ = id => document.getElementById(id);
+    const log = x => $("out").textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2);
+    const setStatus = s => $("status").textContent = s;
 
     async function init() {
       auth0Client = await createAuth0Client({
         domain: DOMAIN,
         clientId: CLIENT_ID,
-        authorizationParams: { redirect_uri: REDIRECT_URI, scope: 'openid profile email' }
+        authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
       });
 
       const qs = new URLSearchParams(window.location.search);
-      if (qs.has('code') || qs.has('error')) {
+      if (qs.has("code") || qs.has("error")) {
         await auth0Client.handleRedirectCallback();
         history.replaceState({}, document.title, window.location.pathname);
       }
 
       const authed = await auth0Client.isAuthenticated();
-      $('logout').disabled = !authed;
-      $('me').disabled = !authed;
+      $("logout").disabled = !authed;
+      $("me").disabled = !authed;
 
       if (authed) {
         const user = await auth0Client.getUser();
-        setStatus('Logged in');
+        setStatus("Logged in");
         log(user);
       } else {
-        setStatus('Not authenticated');
-        log('Click Login to authenticate.');
+        setStatus("Not authenticated");
+        log("Click Login.");
       }
     }
 
-    $('login').onclick = () => auth0Client.loginWithRedirect();
-    $('logout').onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-    $('me').onclick = async () => {
+    $("login").onclick = () => auth0Client.loginWithRedirect();
+    $("logout").onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+    $("me").onclick = async () => {
       const claims = await auth0Client.getIdTokenClaims();
       const sub = claims?.sub;
-      if (!sub) return log('No sub in ID token.');
-
-      setStatus('Fetching from Management API…');
-      const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(sub));
+      if (!sub) return log("No sub in ID token");
+      const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(sub));
       log(await res.json());
-      setStatus('Done');
     };
 
     init();
