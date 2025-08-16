@@ -4,9 +4,14 @@
   <meta charset="utf-8" />
   <title>Auth0 Login + Management API (Netlify)</title>
 
-  <!-- Simple CSP that allows our own scripts and inline (keep it simple while debugging) -->
+  <!-- Minimal CSP that won’t block our local SDK -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.netlify.app; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://*.auth0.com;">
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline';
+                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com;
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data:;
+                 frame-src https://*.auth0.com;">
 
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
@@ -15,8 +20,24 @@
     .muted { opacity:.7; }
   </style>
 
-  <!-- Load Auth0 SDK from YOUR site (no CDN) -->
+  <!-- Load local UMD build -->
   <script src="/vendor/auth0-spa-js.production.js"></script>
+
+  <!-- ESM fallback -->
+  <script type="module">
+    if (typeof window.createAuth0Client !== 'function') {
+      import('/vendor/auth0-spa-js.production.esm.js').then(mod => {
+        if (typeof mod.createAuth0Client === 'function') {
+          window.createAuth0Client = mod.createAuth0Client;
+          console.log('[Auth0] Loaded ESM fallback');
+        } else {
+          console.error('[Auth0] ESM fallback loaded but no createAuth0Client export');
+        }
+      }).catch(err => console.error('[Auth0] Failed to load ESM fallback:', err));
+    } else {
+      console.log('[Auth0] Loaded UMD SDK');
+    }
+  </script>
 </head>
 <body>
   <h1>Auth0 Login</h1>
@@ -32,7 +53,7 @@
   <pre id="out">Ready.</pre>
 
   <script>
-    // === SPA config (public) ===
+    // === SPA config (public SPA app) ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
@@ -44,14 +65,18 @@
     let auth0Client = null;
 
     async function init() {
-      if (typeof createAuth0Client !== "function") {
+      // Give ESM fallback a tick to attach
+      if (typeof window.createAuth0Client !== "function") {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      if (typeof window.createAuth0Client !== "function") {
         setStatus("SDK not loaded");
-        log("SDK non caricato anche da /vendor. Controlla che /vendor/auth0-spa-js.production.js sia servito (Network 200).");
+        log("SDK non caricato da /vendor: apri Network e verifica che /vendor/auth0-spa-js.production.js sia 200. Se 404, controlla netlify.toml build command e che il deploy sia riuscito.");
         return;
       }
 
       try {
-        auth0Client = await createAuth0Client({
+        auth0Client = await window.createAuth0Client({
           domain: DOMAIN,
           clientId: CLIENT_ID,
           authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
