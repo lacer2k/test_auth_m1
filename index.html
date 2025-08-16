@@ -2,62 +2,101 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 + Netlify Proxy Demo</title>
+  <title>Auth0 Login + Management API (Netlify)</title>
+  <!-- Carica l’SDK Auth0 PRIMA del tuo codice -->
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
+    button { padding: .6rem 1rem; margin-right: .5rem; }
+    pre { background: #0b1020; color: #c9f7ff; padding: 12px; border-radius: 8px; max-width: 1000px; overflow:auto; }
+    .muted { opacity:.7; }
+  </style>
 </head>
 <body>
-  <h1>Auth0 Demo</h1>
-  <p>Status: <span id="status">Loading…</span></p>
-  <button id="login">Login</button>
-  <button id="logout" disabled>Logout</button>
-  <button id="me" disabled>Get Profile (via Management API)</button>
+  <h1>Auth0 Login</h1>
+  <p class="muted">SPA → Netlify Function → Auth0 Management API</p>
+
+  <p><strong>Status:</strong> <span id="status">Booting…</span></p>
+  <p>
+    <button id="login">Login</button>
+    <button id="logout" disabled>Logout</button>
+    <button id="me" disabled>Get profile (via Management API)</button>
+    <button id="selftest">Run server self-test</button>
+  </p>
   <pre id="out">Ready.</pre>
 
   <script>
+    // === Config SPA (Client ID pubblico della tua SPA) ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
-    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj"; // SPA app
+    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
 
     let auth0Client = null;
-    const $ = id => document.getElementById(id);
-    const log = x => $("out").textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2);
-    const setStatus = s => $("status").textContent = s;
+    const $ = (id) => document.getElementById(id);
+    const log = (x) => { $("out").textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2); };
+    const setStatus = (s) => $("status").textContent = s;
 
     async function init() {
-      auth0Client = await createAuth0Client({
-        domain: DOMAIN,
-        clientId: CLIENT_ID,
-        authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
-      });
-
-      const qs = new URLSearchParams(window.location.search);
-      if (qs.has("code") || qs.has("error")) {
-        await auth0Client.handleRedirectCallback();
-        history.replaceState({}, document.title, window.location.pathname);
+      if (typeof createAuth0Client !== "function") {
+        setStatus("SDK not loaded");
+        log("Auth0 SDK non caricato: controlla lo script tag nell’<head>.");
+        return;
       }
 
-      const authed = await auth0Client.isAuthenticated();
-      $("logout").disabled = !authed;
-      $("me").disabled = !authed;
+      try {
+        auth0Client = await createAuth0Client({
+          domain: DOMAIN,
+          clientId: CLIENT_ID,
+          authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
+        });
 
-      if (authed) {
-        const user = await auth0Client.getUser();
-        setStatus("Logged in");
-        log(user);
-      } else {
-        setStatus("Not authenticated");
-        log("Click Login.");
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.has("code") || qs.has("error")) {
+          try { await auth0Client.handleRedirectCallback(); }
+          finally { history.replaceState({}, document.title, window.location.pathname); }
+        }
+
+        const authed = await auth0Client.isAuthenticated();
+        $("logout").disabled = !authed;
+        $("me").disabled = !authed;
+
+        if (authed) {
+          const user = await auth0Client.getUser();
+          setStatus("Logged in");
+          log({ status: "logged-in", user });
+        } else {
+          setStatus("Not authenticated");
+          log("Click Login to authenticate.");
+        }
+      } catch (e) {
+        setStatus("Init failed");
+        log(e);
       }
     }
 
     $("login").onclick = () => auth0Client.loginWithRedirect();
     $("logout").onclick = () => auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+
     $("me").onclick = async () => {
-      const claims = await auth0Client.getIdTokenClaims();
-      const sub = claims?.sub;
-      if (!sub) return log("No sub in ID token");
-      const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(sub));
-      log(await res.json());
+      try {
+        const claims = await auth0Client.getIdTokenClaims();
+        const sub = claims?.sub;
+        if (!sub) return log("No sub in ID token; fai login prima.");
+        setStatus("Fetching profile via function…");
+        const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(sub));
+        const text = await res.text();
+        try { log(JSON.parse(text)); } catch { log(text); }
+        setStatus("Done");
+      } catch (e) { log(e); setStatus("Error"); }
+    };
+
+    // Nuovo: self-test server
+    $("selftest").onclick = async () => {
+      setStatus("Running self-test…");
+      const res = await fetch("/.netlify/functions/mgmt-selftest");
+      const txt = await res.text();
+      try { log(JSON.parse(txt)); } catch { log(txt); }
+      setStatus("Self-test done");
     };
 
     init();
