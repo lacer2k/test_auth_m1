@@ -1,161 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Fallback meta placeholders (Netlify sed will replace them at build) -->
-  <meta name="auth0-domain" content="dev-ppsnetwf.us.auth0.com">
-<meta name="auth0-client-id" content="v8SikCjLbbH0ioHuoKSkADBHcofOOWHj">
-
-  <title>Secure Time Portal</title>
-
-  <!-- Load Auth0 SDK FIRST (no defer/async!) -->
+  <meta charset="utf-8">
+  <title>Auth0 Login (SPA) + Mgmt Proxy</title>
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
-
-  <!-- Inject build-time env vars (Netlify creates env.js) -->
-  <script src="/env.js"></script>
-
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height:100vh; display:flex; justify-content:center; align-items:center; color:#fff;
-    }
-    .container {
-      background: rgba(255,255,255,.1); backdrop-filter: blur(10px);
-      border-radius: 20px; padding: 3rem; text-align:center;
-      box-shadow: 0 20px 40px rgba(0,0,0,.1);
-      border: 1px solid rgba(255,255,255,.2); max-width: 500px; width: 90%;
-    }
-    .logo { font-size:2.5rem; font-weight:700; margin-bottom:1rem;
-      background: linear-gradient(45deg, #fff, #e0e7ff);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .subtitle { font-size:1.1rem; margin-bottom:2rem; opacity:.9; }
-    .btn { background:linear-gradient(45deg,#4f46e5,#7c3aed); color:#fff; border:0;
-      padding:1rem 2rem; border-radius:50px; cursor:pointer; font-size:1.1rem;
-      box-shadow:0 10px 20px rgba(0,0,0,.2); transition:all .2s; }
-    .btn:hover { transform:translateY(-2px); box-shadow:0 15px 30px rgba(0,0,0,.3); }
-    .logout-btn { background:rgba(239,68,68,.85); margin-top:1rem; }
-    .time-display { background:rgba(255,255,255,.15); border-radius:15px; padding:2rem; margin-top:2rem; }
-    .current-time { font-size:3rem; font-weight:800; margin-bottom:.5rem; }
-    .date-display { font-size:1.2rem; opacity:.8; margin-bottom:1rem; }
-    .error { display:none; background:rgba(239,68,68,.2); border:1px solid rgba(239,68,68,.5);
-      color:#fecaca; padding:1rem; border-radius:10px; margin:1rem 0; }
-    .loading { display:none; margin:1rem 0; font-size:1.1rem; }
-    .spinner { display:inline-block; width:20px; height:20px; border:2px solid rgba(255,255,255,.3);
-      border-top-color:#fff; border-radius:50%; animation: spin 1s linear infinite; margin-right:10px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    body { font-family: system-ui; padding: 2rem; }
+    button { padding: .6rem 1rem; }
+    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">⏰ TimePortal</div>
-    <div class="subtitle">Secure access to current time</div>
+  <h1>Auth0 Login</h1>
+  <p>SPA login via Universal Login. Then we call a Netlify Function that talks to the Management API.</p>
+  <button id="login">Login</button>
+  <button id="logout" disabled>Logout</button>
+  <button id="me" disabled>Get profile (via Management API)</button>
+  <pre id="out">Ready.</pre>
 
-    <div id="loading" class="loading"><span class="spinner"></span> Initializing…</div>
-    <div id="error" class="error"></div>
-
-    <div id="login-section" style="display:none;">
-      <p>Please authenticate to access the current time</p><br>
-      <button id="login-btn" class="btn">🔐 Login with Auth0</button>
-    </div>
-
-    <div id="authenticated-section" style="display:none;">
-      <div>Welcome back!</div>
-      <div><strong>👤 <span id="user-name">–</span></strong><br>
-      📧 <span id="user-email">–</span></div>
-      <div class="time-display">
-        <div id="current-time" class="current-time">--:--:--</div>
-        <div id="current-date" class="date-display">Loading…</div>
-      </div>
-      <button id="logout-btn" class="btn logout-btn">🚪 Logout</button>
-    </div>
-  </div>
-
-  <!-- Your App Logic -->
   <script>
-    let auth0Client = null, timeInterval = null;
+    // ---- configure your tenant/app here ----
+    const DOMAIN = 'dev-ppsnetwf.us.auth0.com';
+    const CLIENT_ID = 'v8SikCjLbbH0ioHuoKSkADBHcofOOWHj';
+    const REDIRECT_URI = window.location.origin + '/';
+    // ----------------------------------------
 
-    const fromEnv = (k) => (window.ENV && window.ENV[k]) || '';
-    const fromMeta = (n) => document.querySelector(`meta[name="${n}"]`)?.content?.trim() || '';
-    const domain = fromEnv('AUTH0_DOMAIN') || fromMeta('auth0-domain');
-    const clientId = fromEnv('AUTH0_CLIENT_ID') || fromMeta('auth0-client-id');
-    const redirectUri = window.location.origin + '/';
+    let auth0Client;
 
-    const auth0Config = {
-      domain, clientId,
-      authorizationParams: { redirect_uri: redirectUri, scope:'openid profile email' }
+    const $ = (id) => document.getElementById(id);
+    const log = (x) => { $('out').textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); };
+
+    async function init() {
+      auth0Client = await createAuth0Client({
+        domain: DOMAIN,
+        clientId: CLIENT_ID,
+        authorizationParams: {
+          redirect_uri: REDIRECT_URI,
+          scope: 'openid profile email'
+        }
+      });
+
+      // handle callback
+      const qs = new URLSearchParams(window.location.search);
+      if (qs.has('code') || qs.has('error')) {
+        await auth0Client.handleRedirectCallback();
+        history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      const authed = await auth0Client.isAuthenticated();
+      $('logout').disabled = !authed;
+      $('me').disabled = !authed;
+
+      if (authed) {
+        const user = await auth0Client.getUser();
+        log({ status: 'logged-in', user });
+      } else {
+        log('Not authenticated. Click Login.');
+      }
+    }
+
+    $('login').onclick = async () => {
+      await auth0Client.loginWithRedirect();
     };
 
-    const loadingEl = document.getElementById('loading');
-    const errorEl = document.getElementById('error');
-    const loginSection = document.getElementById('login-section');
-    const authedSection = document.getElementById('authenticated-section');
-    const loginBtn = document.getElementById('login-btn');
-    const logoutBtn = document.getElementById('logout-btn');
-    const userNameEl = document.getElementById('user-name');
-    const userEmailEl = document.getElementById('user-email');
-    const currentTimeEl = document.getElementById('current-time');
-    const currentDateEl = document.getElementById('current-date');
+    $('logout').onclick = async () => {
+      await auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+    };
 
-    function showError(msg){ errorEl.textContent = msg; errorEl.style.display='block'; }
-    function hideError(){ errorEl.style.display='none'; }
-    function showLogin(){ loginSection.style.display='block'; authedSection.style.display='none'; }
-    function showAuthed(user){
-      userNameEl.textContent = user?.name || user?.email || 'User';
-      userEmailEl.textContent = user?.email || '';
-      loginSection.style.display='none'; authedSection.style.display='block';
-      startClock();
-    }
+    // Calls your serverless function, which calls the Management API with an M2M token
+    $('me').onclick = async () => {
+      try {
+        const idTokenClaims = await auth0Client.getIdTokenClaims();
+        const sub = idTokenClaims?.sub; // e.g. "auth0|abc123"
+        if (!sub) return log('No sub in ID token.');
 
-    function startClock(){
-      const update = ()=>{
-        const now = new Date();
-        currentTimeEl.textContent = now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'Europe/Rome'});
-        currentDateEl.textContent = now.toLocaleDateString('it-IT',{weekday:'long',year:'numeric',month:'long',day:'numeric',timeZone:'Europe/Rome'});
-      };
-      update(); timeInterval=setInterval(update,1000);
-    }
-    function stopClock(){ if(timeInterval){ clearInterval(timeInterval); timeInterval=null; } }
+        const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(sub), {
+          headers: { 'Accept': 'application/json' }
+        });
+        const json = await res.json();
+        log(json);
+      } catch (e) {
+        log(e);
+      }
+    };
 
-    async function initAuth0(){
-      loadingEl.style.display='block'; hideError();
-      try{
-        auth0Client = await createAuth0Client(auth0Config);
-        if(window.location.search.includes('code=') || window.location.search.includes('error=')){
-          await auth0Client.handleRedirectCallback();
-          window.history.replaceState({},document.title,window.location.pathname);
-        }
-        if(await auth0Client.isAuthenticated()){
-          const user = await auth0Client.getUser();
-          showAuthed(user);
-        } else showLogin();
-      }catch(e){
-        console.error('Auth0 init error', e);
-        showError(`Init failed: ${e.error||e.name} — ${e.error_description||e.message}`);
-        showLogin();
-      }finally{ loadingEl.style.display='none'; }
-    }
-
-    async function login(){
-      try{ hideError(); loginBtn.disabled=true; loginBtn.textContent='🔄 Logging in…';
-        await auth0Client.loginWithRedirect({ authorizationParams:{redirect_uri:redirectUri}});
-      }catch(e){ console.error('Login error',e);
-        showError(`Login failed: ${e.error||e.name} — ${e.error_description||e.message}`);
-        loginBtn.disabled=false; loginBtn.textContent='🔐 Login with Auth0'; }
-    }
-
-    async function logout(){
-      try{ stopClock(); await auth0Client.logout({ logoutParams:{returnTo:window.location.origin} }); }
-      catch(e){ console.error('Logout error',e); showError(`Logout failed: ${e.error||e.name} — ${e.error_description||e.message}`); }
-    }
-
-    loginBtn.addEventListener('click', login);
-    logoutBtn.addEventListener('click', logout);
-    document.addEventListener('DOMContentLoaded', initAuth0);
+    init();
   </script>
 </body>
 </html>
