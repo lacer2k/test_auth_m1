@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Fallback meta placeholders (Netlify sed replaces) -->
+  <!-- Fallback meta placeholders (Netlify sed will replace them at build) -->
   <meta name="auth0-domain" content="{{AUTH0_DOMAIN}}">
   <meta name="auth0-client-id" content="{{AUTH0_CLIENT_ID}}">
 
   <title>Secure Time Portal</title>
 
-  <!-- Inject build-time env values -->
-  <script src="/env.js"></script>
+  <!-- Load Auth0 SDK FIRST (no defer/async!) -->
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
 
-  <!-- Auth0 SPA SDK -->
-  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js" defer></script>
+  <!-- Inject build-time env vars (Netlify creates env.js) -->
+  <script src="/env.js"></script>
 
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -75,8 +75,10 @@
     </div>
   </div>
 
+  <!-- Your App Logic -->
   <script>
     let auth0Client = null, timeInterval = null;
+
     const fromEnv = (k) => (window.ENV && window.ENV[k]) || '';
     const fromMeta = (n) => document.querySelector(`meta[name="${n}"]`)?.content?.trim() || '';
     const domain = fromEnv('AUTH0_DOMAIN') || fromMeta('auth0-domain');
