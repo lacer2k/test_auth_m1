@@ -1,15 +1,15 @@
 // netlify/functions/mgmt-user.js
-
 export async function handler(event) {
   const { AUTH0_DOMAIN, AUTH0_M2M_CLIENT_ID, AUTH0_M2M_CLIENT_SECRET } = process.env;
   const user_id = event.queryStringParameters?.user_id;
 
-  if (!user_id) {
-    return respond(400, { error: "user_id_required" });
+  if (!user_id) return respond(400, { error: "user_id_required" });
+  if (!AUTH0_DOMAIN || !AUTH0_M2M_CLIENT_ID || !AUTH0_M2M_CLIENT_SECRET) {
+    return respond(500, { error: "missing_env", detail: "Set AUTH0_DOMAIN, AUTH0_M2M_CLIENT_ID, AUTH0_M2M_CLIENT_SECRET in Netlify env." });
   }
 
   try {
-    // 1. Ottieni token M2M
+    // 1) Client Credentials → token M2M
     const tokenRes = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -21,13 +21,10 @@ export async function handler(event) {
         scope: "read:users"
       })
     });
-
-    if (!tokenRes.ok) {
-      return respond(500, { error: "token_error", detail: await tokenRes.text() });
-    }
+    if (!tokenRes.ok) return respond(500, { error: "token_error", detail: await tokenRes.text() });
     const { access_token } = await tokenRes.json();
 
-    // 2. Chiama Management API
+    // 2) Management API
     const mgmtRes = await fetch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(user_id)}`, {
       headers: { Authorization: `Bearer ${access_token}` }
     });
