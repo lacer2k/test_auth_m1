@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="auth0-domain" content="AUTH0_DOMAIN_PLACEHOLDER">
+    <meta name="auth0-client-id" content="AUTH0_CLIENT_ID_PLACEHOLDER">
     <title>Secure Time Portal</title>
     <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"></script>
     <style>
@@ -211,18 +213,27 @@
     let auth0Client = null;
     let timeInterval = null;
 
-    // Auth0 configuration - Get these from your Netlify site's environment variables
-    // Or replace with your actual values
+    // Auth0 configuration using Netlify environment variables
+    // These will be injected at build time
     const auth0Config = {
-        domain: window.location.hostname.includes('netlify.app') 
-            ? `${window.location.hostname.split('.')[0]}.auth0.com` 
-            : 'YOUR_AUTH0_DOMAIN.auth0.com',
-        clientId: 'YOUR_AUTH0_CLIENT_ID', // Replace with your actual Client ID
+        domain: window.ENV?.AUTH0_DOMAIN || 'AUTH0_DOMAIN_PLACEHOLDER',
+        clientId: window.ENV?.AUTH0_CLIENT_ID || 'AUTH0_CLIENT_ID_PLACEHOLDER',
         authorizationParams: {
             redirect_uri: window.location.origin,
             scope: 'openid profile email'
         }
     };
+
+    // Fallback: try to get from meta tags if window.ENV is not available
+    if (auth0Config.domain === 'AUTH0_DOMAIN_PLACEHOLDER') {
+        const domainMeta = document.querySelector('meta[name="auth0-domain"]');
+        const clientIdMeta = document.querySelector('meta[name="auth0-client-id"]');
+        
+        if (domainMeta && clientIdMeta) {
+            auth0Config.domain = domainMeta.content;
+            auth0Config.clientId = clientIdMeta.content;
+        }
+    }
 
     // DOM elements
     const loadingEl = document.getElementById('loading');
