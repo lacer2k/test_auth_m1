@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Time Portal</title>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+```
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+    }
+
+    .container {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 3rem;
+        text-align: center;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        max-width: 500px;
+        width: 90%;
+    }
+
+    .logo {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        background: linear-gradient(45deg, #fff, #e0e7ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .subtitle {
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+        opacity: 0.9;
+    }
+
+    .login-section {
+        margin-bottom: 2rem;
+    }
+
+    .btn {
+        background: linear-gradient(45deg, #4f46e5, #7c3aed);
+        color: white;
+        border: none;
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .time-display {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 15px;
+        padding: 2rem;
+        margin-top: 2rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .current-time {
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .date-display {
+        font-size: 1.2rem;
+        opacity: 0.8;
+        margin-bottom: 1rem;
+    }
+
+    .welcome-message {
+        font-size: 1.3rem;
+        margin-bottom: 1rem;
+        color: #e0e7ff;
+    }
+
+    .user-info {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .loading {
+        display: none;
+        font-size: 1.1rem;
+        margin: 1rem 0;
+    }
+
+    .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 10px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .error {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        color: #fecaca;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+
+    .logout-btn {
+        background: rgba(239, 68, 68, 0.8);
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        margin-top: 1rem;
+    }
+
+    .logout-btn:hover {
+        background: rgba(239, 68, 68, 1);
+    }
+
+    @media (max-width: 600px) {
+        .container {
+            padding: 2rem;
+        }
+        
+        .current-time {
+            font-size: 2rem;
+        }
+        
+        .logo {
+            font-size: 2rem;
+        }
+    }
+</style>
+```
+
+</head>
+<body>
+    <div class="container">
+        <div class="logo">⏰ TimePortal</div>
+        <div class="subtitle">Secure access to current time</div>
+
+```
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        Initializing...
+    </div>
+    
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <div id="login-section" class="login-section" style="display: none;">
+        <p>Please authenticate to access the current time</p>
+        <br>
+        <button id="login-btn" class="btn">🔐 Login with Auth0</button>
+    </div>
+    
+    <div id="authenticated-section" style="display: none;">
+        <div class="welcome-message">Welcome back!</div>
+        <div id="user-info" class="user-info"></div>
+        
+        <div class="time-display">
+            <div id="current-time" class="current-time">--:--:--</div>
+            <div id="current-date" class="date-display">Loading...</div>
+            <div style="font-size: 0.9rem; opacity: 0.7;">Live time updates every second</div>
+        </div>
+        
+        <button id="logout-btn" class="btn logout-btn">🚪 Logout</button>
+    </div>
+</div>
+
+<script>
+    let timeInterval = null;
+
+    // DOM elements
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const loginSection = document.getElementById('login-section');
+    const authenticatedSection = document.getElementById('authenticated-section');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userInfoEl = document.getElementById('user-info');
+    const currentTimeEl = document.getElementById('current-time');
+    const currentDateEl = document.getElementById('current-date');
+
+    // Check authentication status using Netlify Identity
+    function checkAuthStatus() {
+        try {
+            loadingEl.style.display = 'block';
+            
+            // Check if user is logged in via Netlify Identity
+            const user = netlifyIdentity.currentUser();
+            
+            if (user) {
+                showAuthenticatedContent(user);
+            } else {
+                showLoginContent();
+            }
+            
+        } catch (error) {
+            console.error('Authentication check error:', error);
+            showError('Failed to check authentication status.');
+        } finally {
+            loadingEl.style.display = 'none';
+        }
+    }
+
+    // Show login interface
+    function showLoginContent() {
+        loginSection.style.display = 'block';
+        authenticatedSection.style.display = 'none';
+    }
+
+    // Show authenticated content
+    function showAuthenticatedContent(user) {
+        try {
+            // Display user info
+            userInfoEl.innerHTML = `
+                <strong>👤 ${user.user_metadata?.full_name || user.email}</strong><br>
+                📧 ${user.email}
+            `;
+            
+            loginSection.style.display = 'none';
+            authenticatedSection.style.display = 'block';
+            
+            // Start the time display
+            startTimeDisplay();
+            
+        } catch (error) {
+            console.error('Error displaying user info:', error);
+            showError('Failed to display user information.');
+        }
+    }
+
+    // Start real-time clock
+    function startTimeDisplay() {
+        function updateTime() {
+            const now = new Date();
+            
+            // Format time
+            const timeOptions = {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: 'Europe/Rome' // Italian timezone
+            };
+            
+            // Format date
+            const dateOptions = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'Europe/Rome'
+            };
+            
+            const timeString = now.toLocaleTimeString('it-IT', timeOptions);
+            const dateString = now.toLocaleDateString('it-IT', dateOptions);
+            
+            currentTimeEl.textContent = timeString;
+            currentDateEl.textContent = dateString;
+        }
+        
+        // Update immediately and then every second
+        updateTime();
+        timeInterval = setInterval(updateTime, 1000);
+    }
+
+    // Stop time display
+    function stopTimeDisplay() {
+        if (timeInterval) {
+            clearInterval(timeInterval);
+            timeInterval = null;
+        }
+    }
+
+    // Show error message
+    function showError(message) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+    }
+
+    // Hide error message
+    function hideError() {
+        errorEl.style.display = 'none';
+    }
+
+    // Login function
+    function login() {
+        try {
+            hideError();
+            loginBtn.disabled = true;
+            loginBtn.textContent = '🔄 Logging in...';
+            
+            netlifyIdentity.open();
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            showError('Login failed. Please try again.');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '🔐 Login with Auth0';
+        }
+    }
+
+    // Logout function
+    function logout() {
+        try {
+            stopTimeDisplay();
+            netlifyIdentity.logout();
+        } catch (error) {
+            console.error('Logout error:', error);
+            showError('Logout failed. Please try again.');
+        }
+    }
+
+    // Initialize Netlify Identity
+    function initializeNetlifyIdentity() {
+        // Initialize Netlify Identity
+        netlifyIdentity.init();
+        
+        // Listen for authentication events
+        netlifyIdentity.on('login', user => {
+            showAuthenticatedContent(user);
+            netlifyIdentity.close();
+        });
+        
+        netlifyIdentity.on('logout', () => {
+            showLoginContent();
+            stopTimeDisplay();
+        });
+        
+        // Check initial auth status
+        checkAuthStatus();
+    }
+
+    // Event listeners
+    loginBtn.addEventListener('click', login);
+    logoutBtn.addEventListener('click', logout);
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', initializeNetlifyIdentity);
+</script>
+```
+
+</body>
+</html>
