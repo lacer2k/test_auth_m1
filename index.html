@@ -4,14 +4,10 @@
   <meta charset="utf-8" />
   <title>Auth0 Login + Management API (Netlify)</title>
 
-  <!-- Content Security Policy: allow our domain + Auth0 CDNs -->
+  <!-- Simple CSP that allows our own scripts and inline (keep it simple while debugging) -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 script-src 'self' https://cdn.auth0.com https://unpkg.com 'unsafe-inline';
-                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.auth0.com https://*.netlify.app;
-                 style-src 'self' 'unsafe-inline';
-                 img-src 'self' data: https:;
-                 frame-src https://*.auth0.com;">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.netlify.app; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https://*.auth0.com;">
+
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
     button { padding: .6rem 1rem; margin-right: .5rem; }
@@ -19,21 +15,8 @@
     .muted { opacity:.7; }
   </style>
 
-  <!-- Load Auth0 SDK FIRST (no defer/async). Add fallback if it fails -->
-  <script>
-    function loadAuth0Fallback(){
-      console.warn('[Auth0] Primary SDK failed, loading fallback from unpkg…');
-      var s = document.createElement('script');
-      s.src = 'https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.js';
-      s.onload = () => console.log('[Auth0] Fallback SDK loaded');
-      s.onerror = () => console.error('[Auth0] Fallback SDK failed to load');
-      document.head.appendChild(s);
-    }
-  </script>
-  <script id="auth0-sdk"
-          src="https://cdn.auth0.com/js/auth0-spa-js/2.0.7/auth0-spa-js.production.js"
-          onload="console.log('[Auth0] SDK loaded')"
-          onerror="loadAuth0Fallback()"></script>
+  <!-- Load Auth0 SDK from YOUR site (no CDN) -->
+  <script src="/vendor/auth0-spa-js.production.js"></script>
 </head>
 <body>
   <h1>Auth0 Login</h1>
@@ -49,7 +32,7 @@
   <pre id="out">Ready.</pre>
 
   <script>
-    // === Config SPA (public SPA Client ID) ===
+    // === SPA config (public) ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
@@ -60,12 +43,10 @@
 
     let auth0Client = null;
 
-    async function safeInit() {
-      // Verify SDK presence
+    async function init() {
       if (typeof createAuth0Client !== "function") {
-        console.error("[Auth0] SDK not available (createAuth0Client undefined).");
         setStatus("SDK not loaded");
-        log("Auth0 SDK non caricato: controlla rete, CSP o estensioni/AdBlock. Vedi Network tab per il file auth0-spa-js.production.js.");
+        log("SDK non caricato anche da /vendor. Controlla che /vendor/auth0-spa-js.production.js sia servito (Network 200).");
         return;
       }
 
@@ -95,7 +76,6 @@
           log("Click Login to authenticate.");
         }
       } catch (e) {
-        console.error("[Auth0] init error:", e);
         setStatus("Init failed");
         log(e);
       }
@@ -124,11 +104,7 @@
       setStatus("Self-test done");
     };
 
-    // Wait a tick so the SDK <script> can execute, then init
-    document.addEventListener("DOMContentLoaded", () => {
-      // small delay to ensure onload executed if needed
-      setTimeout(safeInit, 0);
-    });
+    document.addEventListener("DOMContentLoaded", init);
   </script>
 </body>
 </html>
