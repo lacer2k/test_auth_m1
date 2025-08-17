@@ -11,13 +11,7 @@ curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.product
   -o vendor/auth0-spa-js.production.esm.js
 """
 
-# Serve the real file for /callback (avoid SPA swallowing it)
-[[redirects]]
-  from = "/callback"
-  to = "/callback.html"
-  status = 200
-
-# Keep SPA fallback LAST
+# Optional SPA fallback if you navigate to deep routes (safe to omit)
 [[redirects]]
   from = "/*"
   to = "/index.html"
