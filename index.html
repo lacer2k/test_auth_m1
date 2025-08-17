@@ -1,260 +1,80 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Auth0 Auto Login + Token Viewer (con logging)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Carico la libreria Auth0 SPA SDK dal CDN 2.x (URL "stabile" sul major) -->
-  <script
-    <script src="/vendor/auth0-spa-js.production.js" defer></script>
-    crossorigin="anonymous"
-    defer
-    onload="window.__auth0SdkReady = true;"
-    onerror="window.__auth0SdkError = 'Impossibile caricare auth0-spa-js dal CDN';">
-  </script>
-
-  <style>
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; }
-    h1 { margin-bottom: 4px; }
-    .muted { color: #475569; font-size: 14px; }
-    .ok { color: #16a34a; font-weight: 600; }
-    .bad { color: #dc2626; font-weight: 600; }
-    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
-    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin: 16px 0 8px; }
-    button { border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; background: #111827; color: #fff; }
-    .kv { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth0 Universal Login Demo</title>
 </head>
 <body>
-  <h1>Auth0 Login (auto) + Token Viewer</h1>
-  <div class="muted kv">Dominio: <code>dev-ppsnetwf.us.auth0.com</code> — Client ID: <code>v8SikCjLbbH0ioHuoKSkADBHcofOOWHj</code></div>
-  <div id="status" class="muted">Stato: inizializzazione…</div>
-  <div style="margin: 12px 0;">
-    <button id="logout" style="display:none">Logout</button>
-  </div>
+  <h1>Welcome to My App</h1>
 
-  <div class="row">
-    <h3 style="margin:0">Profilo utente</h3>
-    <button data-copy="#profile">Copia</button>
-  </div>
-  <pre id="profile">—</pre>
+  <!-- Buttons -->
+  <button id="loginButton">Log In</button>
+  <button id="logoutButton" style="display:none;">Log Out</button>
 
-  <div class="row">
-    <h3 style="margin:0">Access Token</h3>
-    <button data-copy="#accessToken">Copia</button>
-  </div>
-  <pre id="accessToken">—</pre>
+  <!-- User Info -->
+  <pre id="userInfo" style="background:#f0f0f0;padding:10px;display:none;"></pre>
 
-  <div class="row">
-    <h3 style="margin:0">ID Token (JWT)</h3>
-    <button data-copy="#idToken">Copia</button>
-  </div>
-  <pre id="idToken">—</pre>
-
-  <div class="row">
-    <h3 style="margin:0">Log</h3>
-    <button data-copy="#log">Copia</button>
-  </div>
-  <pre id="log">—</pre>
-
+  <!-- Auth0 SDK -->
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
   <script>
-    // ===== Logger aggressivo su pagina =====
-    (function enableAggressiveLogging() {
-      const logEl = document.getElementById("log");
-      const append = (msg, data) => {
-        const time = new Date().toISOString();
-        const line = [time, msg, (data !== undefined ? (typeof data === "string" ? data : JSON.stringify(data, null, 2)) : "")].filter(Boolean).join(" — ");
-        logEl.textContent = (logEl.textContent === "—" ? "" : logEl.textContent + "\n") + line;
-        console.log("[LOG]", line);
-      };
-      window.__log = append;
-
-      // Console patch
-      ["log","warn","error"].forEach(fn => {
-        const orig = console[fn].bind(console);
-        console[fn] = (...args) => {
-          try { append("console." + fn, args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")); } catch {}
-          orig(...args);
-        };
-      });
-
-      // Errori globali
-      window.addEventListener("error", (e) => {
-        append("window.error", { message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, error: String(e.error) });
-      });
-
-      // Promise non gestite
-      window.addEventListener("unhandledrejection", (e) => {
-        append("unhandledrejection", { reason: (e.reason && e.reason.message) ? e.reason.message : String(e.reason) });
-      });
-
-      // Fetch logging (soft wrap)
-      const _fetch = window.fetch.bind(window);
-      window.fetch = async (...args) => {
-        append("fetch.request", { url: args[0], options: args[1] });
-        try {
-          const res = await _fetch(...args);
-          append("fetch.response", { url: res.url, ok: res.ok, status: res.status });
-          return res;
-        } catch (err) {
-          append("fetch.error", { url: String(args[0]), error: String(err) });
-          throw err;
-        }
-      };
-    })();
-
-    // ===== Utility UI =====
-    function setStatus(msg, ok = null) {
-      const el = document.getElementById("status");
-      el.textContent = "Stato: " + msg;
-      el.className = ok === true ? "ok" : ok === false ? "bad" : "muted";
-      __log("status", msg);
-    }
-
-    function bindCopyButtons() {
-      document.querySelectorAll("button[data-copy]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const sel = btn.getAttribute("data-copy");
-          const box = document.querySelector(sel);
-          if (!box) return;
-          navigator.clipboard.writeText(box.textContent || "").then(() => {
-            const old = btn.textContent;
-            btn.textContent = "Copiato ✓";
-            setTimeout(() => (btn.textContent = old), 800);
-          });
-        });
-      });
-    }
-
-    function pretty(objOrString) {
-      try {
-        if (typeof objOrString === "string") {
-          // se è un JWT stampo payload
-          if (objOrString.split(".").length === 3) {
-            const [, payload] = objOrString.split(".");
-            const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-            return JSON.stringify({ raw: objOrString, payload: json }, null, 2);
-          }
-          return objOrString;
-        }
-        return JSON.stringify(objOrString, null, 2);
-      } catch {
-        return String(objOrString);
+    // Your Auth0 config
+    const config = {
+      domain: "dev-ppsnetwf.us.auth0.com",
+      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",
+      authorizationParams: {
+        redirect_uri: window.location.origin
       }
-    }
+    };
 
-    // ===== Auth0 Config =====
-    const auth0Domain = "dev-ppsnetwf.us.auth0.com";
-    const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
-    const audience = null; // <-- se vuoi un JWT per una tua API, imposta qui l'identifier della tua API su Auth0
+    let auth0Client;
 
-    let auth0Client = null;
+    // Initialize Auth0 client
+    async function initAuth0() {
+      auth0Client = await auth0.createAuth0Client(config);
 
-    async function configureClient() {
-      if (!window.createAuth0Client) {
-        // SDK non caricato
-        const err = window.__auth0SdkError || "createAuth0Client non presente: CDN bloccato/CSP?";
-        __log("sdk.missing", err);
-        throw new Error(err);
+      // Handle redirect callback
+      if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
+        await auth0Client.handleRedirectCallback();
+        window.history.replaceState({}, document.title, "/"); // clean query params
       }
-      __log("sdk.ready", true);
 
-      auth0Client = await createAuth0Client({
-        domain: auth0Domain,
-        clientId: clientId,
-        cacheLocation: "localstorage",
-        useRefreshTokens: true,
-        authorizationParams: {
-          redirect_uri: window.location.origin,
-          scope: "openid profile email" + (audience ? " offline_access" : ""),
-          ...(audience ? { audience } : {})
-        }
-      });
-      __log("sdk.configured", true);
+      updateUI();
     }
 
     async function updateUI() {
       const isAuthenticated = await auth0Client.isAuthenticated();
-      document.getElementById("logout").style.display = isAuthenticated ? "inline-block" : "none";
 
-      if (!isAuthenticated) {
-        setStatus("non autenticato — redirigo al login…");
-        await auth0Client.loginWithRedirect();
-        return;
-      }
-
-      setStatus("autenticato ✅", true);
-
-      // Profilo
-      try {
+      if (isAuthenticated) {
+        document.getElementById("loginButton").style.display = "none";
+        document.getElementById("logoutButton").style.display = "inline-block";
+        
         const user = await auth0Client.getUser();
-        document.getElementById("profile").textContent = pretty(user || {});
-        __log("user.profile", user);
-      } catch (e) {
-        document.getElementById("profile").textContent = "Errore profilo:\n" + e.message;
-        __log("user.profile.error", e.message);
-      }
-
-      // Access Token
-      try {
-        const accessToken = await auth0Client.getTokenSilently(
-          audience ? { authorizationParams: { audience } } : {}
-        );
-        document.getElementById("accessToken").textContent = pretty(accessToken || "—");
-        __log("token.access", !!accessToken);
-      } catch (e) {
-        document.getElementById("accessToken").textContent = "Errore access token:\n" + e.message;
-        __log("token.access.error", e.message);
-      }
-
-      // ID Token
-      try {
-        const claims = await auth0Client.getIdTokenClaims();
-        const idTokenRaw = claims && claims.__raw ? claims.__raw : null;
-        document.getElementById("idToken").textContent = pretty(idTokenRaw || claims || "—");
-        __log("token.id", !!idTokenRaw);
-      } catch (e) {
-        document.getElementById("idToken").textContent = "Errore ID token:\n" + e.message;
-        __log("token.id.error", e.message);
+        document.getElementById("userInfo").style.display = "block";
+        document.getElementById("userInfo").textContent = JSON.stringify(user, null, 2);
+      } else {
+        document.getElementById("loginButton").style.display = "inline-block";
+        document.getElementById("logoutButton").style.display = "none";
+        document.getElementById("userInfo").style.display = "none";
       }
     }
 
-    async function boot() {
-      bindCopyButtons();
+    // Login
+    document.getElementById("loginButton").addEventListener("click", async () => {
+      await auth0Client.loginWithRedirect();
+    });
 
-      try {
-        setStatus("attendo caricamento SDK…");
-        // aspetto che lo script defer finisca
-        if (!window.__auth0SdkReady) {
-          // attendo un po' (max ~3s)
-          for (let i = 0; i < 30 && !window.__auth0SdkReady; i++) {
-            await new Promise(r => setTimeout(r, 100));
-          }
+    // Logout
+    document.getElementById("logoutButton").addEventListener("click", () => {
+      auth0Client.logout({
+        logoutParams: {
+          returnTo: window.location.origin
         }
+      });
+    });
 
-        setStatus("configuro client…");
-        await configureClient();
-
-        const qs = window.location.search;
-        if (qs.includes("code=") && qs.includes("state=")) {
-          setStatus("gestisco callback…");
-          await auth0Client.handleRedirectCallback();
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        await updateUI();
-      } catch (e) {
-        console.error(e);
-        setStatus("errore: " + e.message, false);
-      }
-
-      document.getElementById("logout").onclick = () => {
-        auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-      };
-    }
-
-    window.addEventListener("DOMContentLoaded", boot);
+    // Run
+    initAuth0();
   </script>
 </body>
 </html>
