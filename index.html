@@ -27,8 +27,13 @@
     console.log("ID Token user:", user);
 
     // 👇 chiamata al tuo endpoint serverless
-    const res = await fetch("/.netlify/functions/mgmt-user");
-    const data = await res.json();
+    // 👇 call your serverless function WITH the user's sub
+const res = await fetch("/.netlify/functions/mgmt-user", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ sub: user.sub })
+});
+const data = await res.json();
     console.log("Management API user:", data);
 
     document.body.innerHTML = `
