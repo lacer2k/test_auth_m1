@@ -17,3 +17,7 @@ ls -l vendor
 from = "/*"
 to = "/index.html"
 status = 200
+
+[edge_functions]
+path = "/private/*"
+function = "protect"
