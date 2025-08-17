@@ -2,8 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="utf-8" />
-  <title>Login…</title>
-
+  <title>Auth0 + Netlify</title>
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline';
@@ -12,179 +11,124 @@
                  img-src 'self' data:;
                  frame-src https://*.auth0.com;">
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; line-height: 1.4; }
-    pre { background: #0b1020; color: #c9f7ff; padding: 12px; border-radius: 8px; overflow:auto; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; line-height: 1.45; }
+    button { padding:.6rem 1rem; border-radius:8px; border:0; cursor:pointer; }
+    .primary { background:#4f46e5; color:#fff; }
+    .danger { background:#ef4444; color:#fff; }
+    pre { background:#0b1020; color:#c9f7ff; padding:12px; border-radius:8px; overflow:auto; }
     .muted { opacity:.7; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .err { color:#b91c1c; }
-    .ok  { color:#065f46; }
-    a.btn { display:inline-block; padding:.5rem .9rem; background:#ef4444; color:#fff; text-decoration:none; border-radius:8px; }
   </style>
-
-  <script>
-    async function loadAuth0UMD() {
-      return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = '/vendor/auth0-spa-js.production.js';
-        s.onload = () => {
-          if (typeof window.createAuth0Client === 'function') resolve({ createAuth0Client: window.createAuth0Client });
-          else reject(new Error('UMD loaded but createAuth0Client is missing'));
-        };
-        s.onerror = () => reject(new Error('UMD script load failed'));
-        document.head.appendChild(s);
-      });
-    }
-  </script>
 
   <script type="module">
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/callback";
+    const LOGIN_FLAG = "auth0_login_in_progress";
 
-    const ui = {
-      set(html) {
-        document.body.innerHTML = html;
-        this.status = document.getElementById('status');
-        this.out = document.getElementById('out');
-        const logout = document.getElementById('logout');
-        if (logout) {
-          logout.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (window.__auth0) {
-              window.__auth0.logout({ logoutParams: { returnTo: window.location.origin } });
-            }
-          });
+    // Load SDK from /vendor (your build puts it there)
+    const { createAuth0Client } = await import('/vendor/auth0-spa-js.production.esm.js');
+    const auth0 = await createAuth0Client({
+      domain: DOMAIN,
+      clientId: CLIENT_ID,
+      authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
+    });
+
+    // ----- UI helpers -----
+    const root = document.body;
+    function renderLoggedOut(msg) {
+      root.innerHTML = `
+        <h1>Welcome</h1>
+        ${msg ? `<p class="muted">${msg}</p>` : ""}
+        <button id="login" class="primary">Login with Auth0</button>
+        <pre id="log">Not authenticated.</pre>
+      `;
+      document.getElementById('login').onclick = async () => {
+        if (!sessionStorage.getItem(LOGIN_FLAG)) {
+          sessionStorage.setItem(LOGIN_FLAG, "1");  // prevent double attempts
+          await auth0.loginWithRedirect();          // navigates away
         }
-      },
-      log(x) { if (this.out) this.out.textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); },
-      statusText(t, cls = '') { if (this.status) { this.status.textContent = t; this.status.className = cls; } },
-      renderLoggedIn(user) {
-        this.set(`
-          <div class="row">
-            <h1 style="margin:0;">Welcome, ${user.name || user.email || 'User'}</h1>
-            <span class="muted">SPA → Netlify Function → Auth0 Management API</span>
-          </div>
-          <p><strong>Status:</strong> <span id="status" class="ok">Logged in</span></p>
-          <p><a href="#" id="logout" class="btn">Logout</a></p>
-
-          <h3>ID Token claims</h3>
-          <pre id="claims">Loading…</pre>
-
-          <h3>Management API profile</h3>
-          <pre id="out">Loading…</pre>
-        `);
-        document.getElementById('claims').textContent = JSON.stringify(user, null, 2);
-      },
-      renderError(title, err) {
-        this.set(`
-          <h1 class="err">${title}</h1>
-          <pre id="out"></pre>
-          <p class="muted">Apri Console/Network. Verifica /vendor (200 OK) e Callback URLs su Auth0.</p>
-        `);
-        this.log(String(err));
-      },
-      renderRedirecting() { this.set(`<p>Redirecting you to Auth0 login…</p>`); },
-      renderBoot() { this.set(`<p><strong>Status:</strong> <span id="status">Booting…</span></p><pre id="out">Ready.</pre>`); }
-    };
-
-    ui.renderBoot();
-
-    async function loadSDK() {
-      try {
-        const mod = await import('/vendor/auth0-spa-js.production.esm.js');
-        if (typeof mod.createAuth0Client !== 'function') throw new Error('ESM loaded without createAuth0Client');
-        return mod;
-      } catch (e) {
-        console.warn('[Auth0] ESM import failed:', e);
-        return await loadAuth0UMD();
-      }
+      };
     }
 
-    async function main() {
-      const { createAuth0Client } = await loadSDK();
-      const auth0 = await createAuth0Client({
-        domain: DOMAIN,
-        clientId: CLIENT_ID,
-        authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
+    function renderLoggedIn(claims, mgmt) {
+      root.innerHTML = `
+        <h1>Welcome, ${claims.name || claims.email}</h1>
+        <p class="muted">You are authenticated. Management API result below.</p>
+        <div style="display:flex; gap:8px; margin:.5rem 0 1rem;">
+          <button id="logout" class="danger">Logout</button>
+          <button id="refresh" class="">Reload mgmt-user</button>
+        </div>
+        <h3>ID Token claims</h3>
+        <pre id="claims">${JSON.stringify(claims, null, 2)}</pre>
+        <h3>Management API profile</h3>
+        <pre id="out">${mgmt ? JSON.stringify(mgmt, null, 2) : "Loading…"}</pre>
+      `;
+      document.getElementById('logout').onclick = () => {
+        sessionStorage.removeItem(LOGIN_FLAG);
+        auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+      };
+      document.getElementById('refresh').onclick = () => loadMgmt(claims);
+    }
+
+    async function loadMgmt(claims) {
+      const idToken = (await auth0.getIdTokenClaims()).__raw;
+      const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub), {
+        headers: { Authorization: 'Bearer ' + idToken }
       });
-      window.__auth0 = auth0;
-
-      const url = new URL(window.location.href);
-      const isCallback = url.pathname === "/callback";
-      const hasAuthParams = url.searchParams.has("code") || url.searchParams.has("state") || url.searchParams.has("error");
-
-      // FIX #1: handle callback & then LEAVE /callback
-      if (isCallback && hasAuthParams) {
-        try {
-          await auth0.handleRedirectCallback();
-        } catch (err) {
-          ui.renderError('Auth0 callback error', err);
-          return;
-        }
-        const appReturn = url.searchParams.get("app_return") || (window.location.origin + "/");
-        window.location.replace(appReturn); // leave /callback
-        return;
-      }
-
-      let isAuthed = false;
-      try {
-        isAuthed = await auth0.isAuthenticated();
-      } catch (err) {
-        ui.renderError('isAuthenticated failed', err);
-        return;
-      }
-
-      // FIX #2: never trigger login on /callback
-      if (!isAuthed) {
-        if (!isCallback) {
-          ui.renderRedirecting();
-          await auth0.loginWithRedirect();
-        }
-        return;
-      }
-
-      // Get claims (ID token)
-      let claims;
-      try {
-        const c = await auth0.getIdTokenClaims();
-        claims = {
-          given_name: c.given_name,
-          family_name: c.family_name,
-          nickname: c.nickname,
-          name: c.name,
-          picture: c.picture,
-          updated_at: c.updated_at,
-          email: c.email,
-          email_verified: c.email_verified,
-          sub: c.sub,
-          __raw: c.__raw // raw JWT
-        };
-      } catch (err) {
-        ui.renderError('getIdTokenClaims() failed', err);
-        return;
-      }
-
-      ui.renderLoggedIn(claims);
-
-      // FIX #3: call function WITH Authorization header (ID token)
-      try {
-        const url = '/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub);
-        const res = await fetch(url, {
-          headers: { Authorization: 'Bearer ' + claims.__raw }
-        });
-        const text = await res.text();
-        try { ui.log(JSON.parse(text)); } catch { ui.log(text); }
-        ui.statusText('Done', 'ok');
-      } catch (err) {
-        ui.statusText('Error', 'err');
-        ui.log({ error: String(err) });
-      }
+      const text = await res.text();
+      const out = document.getElementById('out');
+      try { out.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+      catch { out.textContent = text; }
     }
 
-    main().catch(err => ui.renderError('Init failed', err));
+    // ----- Router-ish: handle /callback once, then go home -----
+    const url = new URL(window.location.href);
+    const isCallback = url.pathname === "/callback";
+    const hasAuthParams = url.searchParams.has("code") || url.searchParams.has("state") || url.searchParams.has("error");
+
+    if (isCallback && hasAuthParams) {
+      try {
+        await auth0.handleRedirectCallback();       // finish OAuth
+      } catch (e) {
+        // If state mismatch or similar, reset flag and show login button
+        sessionStorage.removeItem(LOGIN_FLAG);
+        return renderLoggedOut("Callback error: " + (e?.message || e));
+      }
+      // success → clear the “in progress” flag and go to the app (not /callback)
+      sessionStorage.removeItem(LOGIN_FLAG);
+      const appReturn = url.searchParams.get("app_return") || (window.location.origin + "/");
+      window.location.replace(appReturn);
+      // stop here; next load will run the normal branch
+    } else {
+      // Normal page load
+      let authed = false;
+      try {
+        authed = await auth0.isAuthenticated();
+      } catch (e) {
+        return renderLoggedOut("Auth check failed: " + (e?.message || e));
+      }
+
+      if (!authed) {
+        // DO NOT auto-redirect → avoid loops. Let user click.
+        return renderLoggedOut();
+      }
+
+      // Authenticated → get claims & call mgmt-user
+      const c = await auth0.getIdTokenClaims();
+      const claims = {
+        given_name: c.given_name, family_name: c.family_name, nickname: c.nickname,
+        name: c.name, picture: c.picture, updated_at: c.updated_at,
+        email: c.email, email_verified: c.email_verified, sub: c.sub, __raw: c.__raw
+      };
+      renderLoggedIn(claims);
+      loadMgmt(claims).catch(err => {
+        const out = document.getElementById('out');
+        out.textContent = "Mgmt error: " + (err?.message || err);
+      });
+    }
   </script>
 </head>
 <body>
-  <p>Loading…</p>
+  Loading…
 </body>
 </html>
