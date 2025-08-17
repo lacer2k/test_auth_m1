@@ -2,26 +2,33 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <title>Auth0 Auto Login + Tokens</title>
+  <title>Auth0 Auto Login + Token Viewer (con logging)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
+
+  <!-- Carico la libreria Auth0 SPA SDK dal CDN 2.x (URL "stabile" sul major) -->
+  <script
+    src="https://cdn.auth0.com/js/auth0-spa-js/2/auth0-spa-js.production.js"
+    crossorigin="anonymous"
+    defer
+    onload="window.__auth0SdkReady = true;"
+    onerror="window.__auth0SdkError = 'Impossibile caricare auth0-spa-js dal CDN';">
+  </script>
+
   <style>
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; max-width: 900px; margin: 32px auto; padding: 0 16px; }
-    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; }
-    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin-bottom: 16px; }
-    button { border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; background: #111827; color: #fff; }
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+    h1 { margin-bottom: 4px; }
     .muted { color: #475569; font-size: 14px; }
     .ok { color: #16a34a; font-weight: 600; }
     .bad { color: #dc2626; font-weight: 600; }
-    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin: 16px 0 8px; }
+    button { border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; background: #111827; color: #fff; }
+    .kv { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 <body>
   <h1>Auth0 Login (auto) + Token Viewer</h1>
-  <p class="muted">
-    Dominio: <code>dev-ppsnetwf.us.auth0.com</code> — Client ID: <code>v8SikCjLbbH0ioHuoKSkADBHcofOOWHj</code>
-  </p>
-
+  <div class="muted kv">Dominio: <code>dev-ppsnetwf.us.auth0.com</code> — Client ID: <code>v8SikCjLbbH0ioHuoKSkADBHcofOOWHj</code></div>
   <div id="status" class="muted">Stato: inizializzazione…</div>
   <div style="margin: 12px 0;">
     <button id="logout" style="display:none">Logout</button>
@@ -45,35 +52,64 @@
   </div>
   <pre id="idToken">—</pre>
 
+  <div class="row">
+    <h3 style="margin:0">Log</h3>
+    <button data-copy="#log">Copia</button>
+  </div>
+  <pre id="log">—</pre>
+
   <script>
-    const auth0Domain = "dev-ppsnetwf.us.auth0.com";
-    const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+    // ===== Logger aggressivo su pagina =====
+    (function enableAggressiveLogging() {
+      const logEl = document.getElementById("log");
+      const append = (msg, data) => {
+        const time = new Date().toISOString();
+        const line = [time, msg, (data !== undefined ? (typeof data === "string" ? data : JSON.stringify(data, null, 2)) : "")].filter(Boolean).join(" — ");
+        logEl.textContent = (logEl.textContent === "—" ? "" : logEl.textContent + "\n") + line;
+        console.log("[LOG]", line);
+      };
+      window.__log = append;
 
-    // Se hai definito un'API in Auth0 e vuoi un access token JWT per quella API, imposta l'audience qui:
-    // Esempio: const audience = "https://api.mysaas.com";
-    const audience = null; // <— lascia null se non ti serve
+      // Console patch
+      ["log","warn","error"].forEach(fn => {
+        const orig = console[fn].bind(console);
+        console[fn] = (...args) => {
+          try { append("console." + fn, args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")); } catch {}
+          orig(...args);
+        };
+      });
 
-    let auth0Client = null;
+      // Errori globali
+      window.addEventListener("error", (e) => {
+        append("window.error", { message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, error: String(e.error) });
+      });
 
+      // Promise non gestite
+      window.addEventListener("unhandledrejection", (e) => {
+        append("unhandledrejection", { reason: (e.reason && e.reason.message) ? e.reason.message : String(e.reason) });
+      });
+
+      // Fetch logging (soft wrap)
+      const _fetch = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        append("fetch.request", { url: args[0], options: args[1] });
+        try {
+          const res = await _fetch(...args);
+          append("fetch.response", { url: res.url, ok: res.ok, status: res.status });
+          return res;
+        } catch (err) {
+          append("fetch.error", { url: String(args[0]), error: String(err) });
+          throw err;
+        }
+      };
+    })();
+
+    // ===== Utility UI =====
     function setStatus(msg, ok = null) {
       const el = document.getElementById("status");
       el.textContent = "Stato: " + msg;
       el.className = ok === true ? "ok" : ok === false ? "bad" : "muted";
-    }
-
-    async function configureClient() {
-      auth0Client = await createAuth0Client({
-        domain: auth0Domain,
-        clientId: clientId,
-        cacheLocation: "localstorage",       // utile in dev/Netlify; rimuovi se non ti serve
-        useRefreshTokens: true,              // rinnovo silenzioso
-        authorizationParams: {
-          redirect_uri: window.location.origin,
-          // scopes base per profilo
-          scope: "openid profile email" + (audience ? " offline_access" : ""),
-          ...(audience ? { audience } : {})
-        }
-      });
+      __log("status", msg);
     }
 
     function bindCopyButtons() {
@@ -94,7 +130,7 @@
     function pretty(objOrString) {
       try {
         if (typeof objOrString === "string") {
-          // prova a decodificare JWT in modo leggibile (payload base64)
+          // se è un JWT stampo payload
           if (objOrString.split(".").length === 3) {
             const [, payload] = objOrString.split(".");
             const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
@@ -108,55 +144,102 @@
       }
     }
 
+    // ===== Auth0 Config =====
+    const auth0Domain = "dev-ppsnetwf.us.auth0.com";
+    const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+    const audience = null; // <-- se vuoi un JWT per una tua API, imposta qui l'identifier della tua API su Auth0
+
+    let auth0Client = null;
+
+    async function configureClient() {
+      if (!window.createAuth0Client) {
+        // SDK non caricato
+        const err = window.__auth0SdkError || "createAuth0Client non presente: CDN bloccato/CSP?";
+        __log("sdk.missing", err);
+        throw new Error(err);
+      }
+      __log("sdk.ready", true);
+
+      auth0Client = await createAuth0Client({
+        domain: auth0Domain,
+        clientId: clientId,
+        cacheLocation: "localstorage",
+        useRefreshTokens: true,
+        authorizationParams: {
+          redirect_uri: window.location.origin,
+          scope: "openid profile email" + (audience ? " offline_access" : ""),
+          ...(audience ? { audience } : {})
+        }
+      });
+      __log("sdk.configured", true);
+    }
+
     async function updateUI() {
       const isAuthenticated = await auth0Client.isAuthenticated();
       document.getElementById("logout").style.display = isAuthenticated ? "inline-block" : "none";
 
       if (!isAuthenticated) {
         setStatus("non autenticato — redirigo al login…");
-        // forza login
         await auth0Client.loginWithRedirect();
         return;
       }
 
       setStatus("autenticato ✅", true);
 
-      // Profilo utente
-      const user = await auth0Client.getUser();
-      document.getElementById("profile").textContent = pretty(user || {});
+      // Profilo
+      try {
+        const user = await auth0Client.getUser();
+        document.getElementById("profile").textContent = pretty(user || {});
+        __log("user.profile", user);
+      } catch (e) {
+        document.getElementById("profile").textContent = "Errore profilo:\n" + e.message;
+        __log("user.profile.error", e.message);
+      }
 
-      // Access Token (può essere opaco se non specifichi un audience)
+      // Access Token
       try {
         const accessToken = await auth0Client.getTokenSilently(
           audience ? { authorizationParams: { audience } } : {}
         );
         document.getElementById("accessToken").textContent = pretty(accessToken || "—");
+        __log("token.access", !!accessToken);
       } catch (e) {
-        document.getElementById("accessToken").textContent = "Errore nel recupero access token:\n" + e.message;
+        document.getElementById("accessToken").textContent = "Errore access token:\n" + e.message;
+        __log("token.access.error", e.message);
       }
 
-      // ID Token (JWT)
+      // ID Token
       try {
         const claims = await auth0Client.getIdTokenClaims();
         const idTokenRaw = claims && claims.__raw ? claims.__raw : null;
         document.getElementById("idToken").textContent = pretty(idTokenRaw || claims || "—");
+        __log("token.id", !!idTokenRaw);
       } catch (e) {
-        document.getElementById("idToken").textContent = "Errore nel recupero ID token:\n" + e.message;
+        document.getElementById("idToken").textContent = "Errore ID token:\n" + e.message;
+        __log("token.id.error", e.message);
       }
     }
 
-    window.onload = async () => {
+    async function boot() {
       bindCopyButtons();
+
       try {
+        setStatus("attendo caricamento SDK…");
+        // aspetto che lo script defer finisca
+        if (!window.__auth0SdkReady) {
+          // attendo un po' (max ~3s)
+          for (let i = 0; i < 30 && !window.__auth0SdkReady; i++) {
+            await new Promise(r => setTimeout(r, 100));
+          }
+        }
+
         setStatus("configuro client…");
         await configureClient();
 
-        // Se rientri dal callback (code, state)
         const qs = window.location.search;
         if (qs.includes("code=") && qs.includes("state=")) {
           setStatus("gestisco callback…");
           await auth0Client.handleRedirectCallback();
-          // pulizia URL
           window.history.replaceState({}, document.title, window.location.pathname);
         }
 
@@ -169,7 +252,9 @@
       document.getElementById("logout").onclick = () => {
         auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
       };
-    };
+    }
+
+    window.addEventListener("DOMContentLoaded", boot);
   </script>
 </body>
 </html>
