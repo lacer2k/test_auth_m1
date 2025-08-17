@@ -1,131 +1,56 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 + Netlify</title>
-  <!-- CSP essenziale per Auth0 -->
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 script-src 'self' 'unsafe-inline';
-                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.auth0.com https://*.us.auth0.com;
-                 style-src 'self' 'unsafe-inline';
-                 img-src 'self' data:;
-                 frame-src https://*.auth0.com https://*.us.auth0.com;">
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; line-height: 1.45; }
-    button { padding:.6rem 1rem; border-radius:8px; border:0; cursor:pointer; margin-right:8px; }
-    .primary { background:#4f46e5; color:#fff; }
-    .danger { background:#ef4444; color:#fff; }
-    pre { background:#0b1020; color:#c9f7ff; padding:12px; border-radius:8px; overflow:auto; }
-    .muted { opacity:.7; }
-  </style>
+  <title>Auth0 Simple Demo</title>
+  <script src="/vendor/auth0-spa-js.production.js"></script>
 </head>
 <body>
-  <h1>Loading…</h1>
+  <h1>Auth0 Login Demo</h1>
+  <button id="login">Login</button>
+  <button id="logout" style="display:none">Logout</button>
+  <pre id="profile">Not logged in</pre>
 
-  <script type="module">
-    // === CONFIG ===
-    const DOMAIN = "dev-ppsnetwf.us.auth0.com";
-    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
-    const REDIRECT_URI = window.location.origin + "/callback";
-    const LOGIN_FLAG = "auth0_login_in_progress";
-
-    // Carico l'SDK da /vendor (scaricato in build)
-    const { createAuth0Client } = await import('/vendor/auth0-spa-js.production.esm.js');
-
-    const auth0 = await createAuth0Client({
-      domain: DOMAIN,
-      clientId: CLIENT_ID,
-      authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" },
-      cacheLocation: "localstorage",   // ✅ persiste dopo i reload
-      useRefreshTokens: true           // ✅ sessione duratura (RTR)
+  <script>
+    const auth0Client = await createAuth0Client({
+      domain: "dev-ppsnetwf.us.auth0.com",   // 🔑 il tuo tenant
+      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj", // 🔑 client SPA
+      authorizationParams: {
+        redirect_uri: window.location.origin,
+        scope: "openid profile email"
+      },
+      cacheLocation: "localstorage",
+      useRefreshTokens: true
     });
 
-    // --- UI helpers ---
-    const root = document.body;
-
-    function renderLoggedOut(msg) {
-      root.innerHTML = `
-        <h1>Welcome</h1>
-        ${msg ? `<p class="muted">${msg}</p>` : ""}
-        <button id="login" class="primary">Login with Auth0</button>
-        <pre id="out">Not authenticated.</pre>
-      `;
-      document.getElementById('login').onclick = async () => {
-        if (!sessionStorage.getItem(LOGIN_FLAG)) {
-          sessionStorage.setItem(LOGIN_FLAG, "1");
-          await auth0.loginWithRedirect(); // va a /callback
-        }
-      };
+    // --- Gestione callback Auth0 (dopo login)
+    if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
+      await auth0Client.handleRedirectCallback();
+      window.history.replaceState({}, document.title, "/");
     }
 
-    function renderLoggedIn(claims, mgmt) {
-      root.innerHTML = `
-        <h1>Welcome, ${claims.name || claims.email}</h1>
-        <p class="muted">Authenticated. Below: Management API.</p>
-        <div style="display:flex; gap:8px; margin:.5rem 0 1rem;">
-          <button id="logout" class="danger">Logout</button>
-          <button id="refresh">Reload mgmt-user</button>
-        </div>
-        <h3>ID Token claims</h3>
-        <pre id="claims">${JSON.stringify({ ...claims, __raw: undefined }, null, 2)}</pre>
-        <h3>Management API profile</h3>
-        <pre id="out">${mgmt ? JSON.stringify(mgmt, null, 2) : "Loading…"}</pre>
-      `;
-      document.getElementById('logout').onclick = () => {
-        sessionStorage.removeItem(LOGIN_FLAG);
-        auth0.logout({ logoutParams: { returnTo: window.location.origin } });
-      };
-      document.getElementById('refresh').onclick = () => loadMgmt(claims).catch(e => setOut("Mgmt error: " + (e?.message || e)));
+    // --- Controlla se utente già loggato
+    if (await auth0Client.isAuthenticated()) {
+      const user = await auth0Client.getUser();
+      document.getElementById("profile").textContent = JSON.stringify(user, null, 2);
+      document.getElementById("login").style.display = "none";
+      document.getElementById("logout").style.display = "inline-block";
+
+      // --- Call Netlify Function (M2M Management API)
+      const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(user.sub));
+      const data = await res.json();
+      document.getElementById("profile").textContent += "\n\n[Mgmt API]\n" + JSON.stringify(data, null, 2);
     }
 
-    function setOut(txt){
-      const el = document.getElementById('out');
-      if (!el) return;
-      try { el.textContent = JSON.stringify(JSON.parse(txt), null, 2); }
-      catch { el.textContent = txt; }
-    }
+    // --- Login
+    document.getElementById("login").addEventListener("click", async () => {
+      await auth0Client.loginWithRedirect();
+    });
 
-    async function loadMgmt(claims) {
-      const idToken = (await auth0.getIdTokenClaims()).__raw;
-      const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub), {
-        headers: { Authorization: 'Bearer ' + idToken }
-      });
-      const text = await res.text();
-      setOut(text);
-    }
-
-    // --- Router: gestisci /callback una volta e poi torna su "/" ---
-    const url = new URL(window.location.href);
-    const isCallback = url.pathname === "/callback";
-    const hasAuthParams = ["code","state","error"].some(k => url.searchParams.has(k));
-
-    if (isCallback && hasAuthParams) {
-      try {
-        await auth0.handleRedirectCallback(); // completa OAuth
-      } catch (e) {
-        sessionStorage.removeItem(LOGIN_FLAG);
-        renderLoggedOut("Callback error: " + (e?.message || e));
-        throw e;
-      }
-      sessionStorage.removeItem(LOGIN_FLAG);
-      // torna all'app (non lasciare l'utente su /callback)
-      window.location.replace(url.searchParams.get("app_return") || (window.location.origin + "/"));
-    } else {
-      // Pagina normale
-      const authed = await auth0.isAuthenticated().catch(() => false);
-      if (!authed) {
-        // no auto-login => niente loop
-        return renderLoggedOut();
-      }
-      const c = await auth0.getIdTokenClaims();
-      const claims = {
-        name: c.name, email: c.email, sub: c.sub,
-        email_verified: c.email_verified, __raw: c.__raw
-      };
-      renderLoggedIn(claims);
-      loadMgmt(claims).catch(err => setOut("Mgmt error: " + (err?.message || err)));
-    }
+    // --- Logout
+    document.getElementById("logout").addEventListener("click", async () => {
+      await auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+    });
   </script>
 </body>
 </html>
