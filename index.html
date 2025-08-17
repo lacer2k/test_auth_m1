@@ -1,98 +1,131 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="it">
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 Popup — Minimal Demo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auth0 + Netlify</title>
+  <!-- CSP essenziale per Auth0 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline';
+                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.auth0.com https://*.us.auth0.com;
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data:;
+                 frame-src https://*.auth0.com https://*.us.auth0.com;">
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 2rem; }
-    button { padding: 8px 14px; border: 0; border-radius: 999px; background:#000; color:#fff; cursor:pointer; }
-    #row { display:flex; gap:24px; flex-wrap:wrap; margin-top: 1rem; }
-    pre { background:#f6f8fa; padding:1rem; border-radius:8px; max-width:900px; white-space:pre-wrap; }
-    .card { flex:1 1 420px; min-width: 320px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; line-height: 1.45; }
+    button { padding:.6rem 1rem; border-radius:8px; border:0; cursor:pointer; margin-right:8px; }
+    .primary { background:#4f46e5; color:#fff; }
+    .danger { background:#ef4444; color:#fff; }
+    pre { background:#0b1020; color:#c9f7ff; padding:12px; border-radius:8px; overflow:auto; }
+    .muted { opacity:.7; }
   </style>
 </head>
 <body>
-  <h1>Auth0 Login (Popup) + M2M (Server)</h1>
-  <p>No callback page. Click login, complete Auth0 Universal Login in a popup, and see results here.</p>
-  <div>
-    <button id="login">Login</button>
-    <button id="logout" style="display:none;background:#555;">Logout</button>
-  </div>
-
-  <div id="row">
-    <div class="card">
-      <h3>Auth0 (Client) — <code>getUser()</code></h3>
-      <pre id="userBox">– not loaded –</pre>
-    </div>
-    <div class="card">
-      <h3>Auth0 (Server via M2M) — Management API</h3>
-      <pre id="mgmtBox">– not loaded –</pre>
-    </div>
-  </div>
+  <h1>Loading…</h1>
 
   <script type="module">
-    import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
+    // === CONFIG ===
+    const DOMAIN = "dev-ppsnetwf.us.auth0.com";
+    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+    const REDIRECT_URI = window.location.origin + "/callback";
+    const LOGIN_FLAG = "auth0_login_in_progress";
 
-    const userBox = document.getElementById('userBox');
-    const mgmtBox = document.getElementById('mgmtBox');
-    const loginBtn = document.getElementById('login');
-    const logoutBtn = document.getElementById('logout');
+    // Carico l'SDK da /vendor (scaricato in build)
+    const { createAuth0Client } = await import('/vendor/auth0-spa-js.production.esm.js');
 
-    // 🔧 Your Auth0 SPA app (safe to expose Client ID in frontend; NOT secrets)
     const auth0 = await createAuth0Client({
-      domain: "dev-ppsnetwf.us.auth0.com",
-      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",
-      // No redirect_uri needed for popup
-      cacheLocation: "localstorage",
-      useRefreshTokens: true
+      domain: DOMAIN,
+      clientId: CLIENT_ID,
+      authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" },
+      cacheLocation: "localstorage",   // ✅ persiste dopo i reload
+      useRefreshTokens: true           // ✅ sessione duratura (RTR)
     });
 
-    async function render() {
-      const isAuth = await auth0.isAuthenticated();
-      loginBtn.style.display = isAuth ? "none" : "inline-block";
-      logoutBtn.style.display = isAuth ? "inline-block" : "none";
+    // --- UI helpers ---
+    const root = document.body;
 
-      if (!isAuth) {
-        userBox.textContent = "– not logged in –";
-        mgmtBox.textContent = "– not logged in –";
-        return;
-      }
-
-      const user = await auth0.getUser();
-      userBox.textContent = JSON.stringify(user, null, 2);
-
-      // Ask server (Netlify Function) to fetch Management API profile for this sub
-      try {
-        const res = await fetch("/.netlify/functions/mgmt-user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sub: user.sub })
-        });
-        const data = await res.json();
-        mgmtBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        mgmtBox.textContent = "ERROR calling mgmt-user: " + (e?.message || e);
-      }
+    function renderLoggedOut(msg) {
+      root.innerHTML = `
+        <h1>Welcome</h1>
+        ${msg ? `<p class="muted">${msg}</p>` : ""}
+        <button id="login" class="primary">Login with Auth0</button>
+        <pre id="out">Not authenticated.</pre>
+      `;
+      document.getElementById('login').onclick = async () => {
+        if (!sessionStorage.getItem(LOGIN_FLAG)) {
+          sessionStorage.setItem(LOGIN_FLAG, "1");
+          await auth0.loginWithRedirect(); // va a /callback
+        }
+      };
     }
 
-    loginBtn.onclick = async () => {
+    function renderLoggedIn(claims, mgmt) {
+      root.innerHTML = `
+        <h1>Welcome, ${claims.name || claims.email}</h1>
+        <p class="muted">Authenticated. Below: Management API.</p>
+        <div style="display:flex; gap:8px; margin:.5rem 0 1rem;">
+          <button id="logout" class="danger">Logout</button>
+          <button id="refresh">Reload mgmt-user</button>
+        </div>
+        <h3>ID Token claims</h3>
+        <pre id="claims">${JSON.stringify({ ...claims, __raw: undefined }, null, 2)}</pre>
+        <h3>Management API profile</h3>
+        <pre id="out">${mgmt ? JSON.stringify(mgmt, null, 2) : "Loading…"}</pre>
+      `;
+      document.getElementById('logout').onclick = () => {
+        sessionStorage.removeItem(LOGIN_FLAG);
+        auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+      };
+      document.getElementById('refresh').onclick = () => loadMgmt(claims).catch(e => setOut("Mgmt error: " + (e?.message || e)));
+    }
+
+    function setOut(txt){
+      const el = document.getElementById('out');
+      if (!el) return;
+      try { el.textContent = JSON.stringify(JSON.parse(txt), null, 2); }
+      catch { el.textContent = txt; }
+    }
+
+    async function loadMgmt(claims) {
+      const idToken = (await auth0.getIdTokenClaims()).__raw;
+      const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub), {
+        headers: { Authorization: 'Bearer ' + idToken }
+      });
+      const text = await res.text();
+      setOut(text);
+    }
+
+    // --- Router: gestisci /callback una volta e poi torna su "/" ---
+    const url = new URL(window.location.href);
+    const isCallback = url.pathname === "/callback";
+    const hasAuthParams = ["code","state","error"].some(k => url.searchParams.has(k));
+
+    if (isCallback && hasAuthParams) {
       try {
-        await auth0.loginWithPopup(); // 👈 No redirects, no callback page
+        await auth0.handleRedirectCallback(); // completa OAuth
       } catch (e) {
-        alert("Login failed: " + (e?.error_description || e?.message || e));
+        sessionStorage.removeItem(LOGIN_FLAG);
+        renderLoggedOut("Callback error: " + (e?.message || e));
+        throw e;
       }
-      render();
-    };
-
-    logoutBtn.onclick = async () => {
-      // Log out locally (and optionally federated)
-      await auth0.logout({ logoutParams: { returnTo: window.location.origin } });
-      render();
-    };
-
-    // Auto-render on load (refresh will keep session if allowed in Auth0)
-    render();
+      sessionStorage.removeItem(LOGIN_FLAG);
+      // torna all'app (non lasciare l'utente su /callback)
+      window.location.replace(url.searchParams.get("app_return") || (window.location.origin + "/"));
+    } else {
+      // Pagina normale
+      const authed = await auth0.isAuthenticated().catch(() => false);
+      if (!authed) {
+        // no auto-login => niente loop
+        return renderLoggedOut();
+      }
+      const c = await auth0.getIdTokenClaims();
+      const claims = {
+        name: c.name, email: c.email, sub: c.sub,
+        email_verified: c.email_verified, __raw: c.__raw
+      };
+      renderLoggedIn(claims);
+      loadMgmt(claims).catch(err => setOut("Mgmt error: " + (err?.message || err)));
+    }
   </script>
 </body>
 </html>
