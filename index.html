@@ -2,123 +2,68 @@
 <html lang="it">
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 Popup + M2M</title>
+  <title>Auth0 + M2M Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 2rem; }
-    button { padding: 8px 14px; border: 0; border-radius: 999px; background:#000; color:#fff; cursor:pointer; }
-    button.ghost { background:#666; }
-    .grid { display:flex; gap:24px; flex-wrap:wrap; margin-top: 16px; }
-    .card { flex:1 1 420px; min-width:320px; }
-    pre { background:#f6f8fa; padding:1rem; border-radius:8px; white-space:pre-wrap; }
-    img.avatar { width:64px; height:64px; border-radius:50%; vertical-align:middle; margin-right:10px; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:2rem}
+    pre{background:#f6f8fa;padding:1rem;border-radius:8px;white-space:pre-wrap}
   </style>
 </head>
 <body>
-  <h1>Auth0 Login (Popup) + Management API</h1>
-  <p>Login via popup (niente callback). Mostro il profilo dell’ID Token <em>e</em> quello della Management API (M2M).</p>
-
-  <div>
-    <button id="login">Login</button>
-    <button id="logout" class="ghost" style="display:none;">Logout</button>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Client (ID Token) — <code>getUser()</code></h3>
-      <div id="clientHeader"></div>
-      <pre id="clientBox">– non autenticato –</pre>
-    </div>
-    <div class="card">
-      <h3>Server (M2M) — Management API</h3>
-      <div id="mgmtHeader"></div>
-      <pre id="mgmtBox">– non autenticato –</pre>
-    </div>
-  </div>
+  <h1>Auth0 + Management API</h1>
+  <pre id="out">Loading…</pre>
 
   <script type="module">
-    // Usa la DEFAULT import (non quella nominata) dal tuo vendor locale
-    import createAuth0Client from "/vendor/auth0-spa-js.production.esm.js";
+    // ✅ use default export
+    import createAuth0Client from '/vendor/auth0-spa-js.production.esm.js';
 
-    const DOMAIN = "dev-ppsnetwf.us.auth0.com";
-    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+    const DOMAIN = 'dev-ppsnetwf.us.auth0.com';
+    const CLIENT_ID = 'v8SikCjLbbH0ioHuoKSkADBHcofOOWHj';
+    const REDIRECT_URI = window.location.origin + '/';
 
-    const loginBtn = document.getElementById("login");
-    const logoutBtn = document.getElementById("logout");
-    const clientBox = document.getElementById("clientBox");
-    const mgmtBox = document.getElementById("mgmtBox");
-    const clientHeader = document.getElementById("clientHeader");
-    const mgmtHeader = document.getElementById("mgmtHeader");
+    const out = document.getElementById('out');
+    const log = (obj) => out.textContent = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2);
 
-    // Inizializza Auth0 SPA client (popup flow, nessun redirect/callback)
-    const auth0 = await createAuth0Client({
-      domain: DOMAIN,
-      clientId: CLIENT_ID,
-      cacheLocation: "localstorage",
-      useRefreshTokens: true,
-      authorizationParams: { scope: "openid profile email" }
-    });
+    try {
+      const auth0 = await createAuth0Client({
+        domain: DOMAIN,
+        clientId: CLIENT_ID,
+        authorizationParams: { redirect_uri: REDIRECT_URI, scope: 'openid profile email' },
+        cacheLocation: 'localstorage',
+        useRefreshTokens: true
+      });
 
-    async function render() {
-      const isAuth = await auth0.isAuthenticated();
-      loginBtn.style.display = isAuth ? "none" : "inline-block";
-      logoutBtn.style.display = isAuth ? "inline-block" : "none";
+      // Handle code/state if we just came back from Auth0
+      if (new URLSearchParams(window.location.search).has('code')) {
+        await auth0.handleRedirectCallback();
+        history.replaceState({}, document.title, '/'); // clean URL
+      }
 
-      if (!isAuth) {
-        clientHeader.innerHTML = "";
-        mgmtHeader.innerHTML = "";
-        clientBox.textContent = "– non autenticato –";
-        mgmtBox.textContent = "– non autenticato –";
+      // Not authenticated? redirect to Auth0
+      if (!(await auth0.isAuthenticated())) {
+        log('Redirecting to login…');
+        await auth0.loginWithRedirect({ authorizationParams: { redirect_uri: REDIRECT_URI } });
         return;
       }
 
-      // 1) Profilo lato client (ID Token)
-      const user = await auth0.getUser(); // contiene name, email, picture, ecc.
-      const picture = user.picture ? `<img class="avatar" src="${user.picture}" alt="avatar">` : "";
-      clientHeader.innerHTML = `${picture}<strong>${user.name || user.nickname || user.email || "Utente"}</strong>`;
-      clientBox.textContent = JSON.stringify(user, null, 2);
+      // 1) Client-side (ID token) user
+      const user = await auth0.getUser(); // contains name/email/picture/etc.
+      // 2) Server-side (M2M) – your function wants ?user_id=<sub>
+      const resp = await fetch(`/.netlify/functions/mgmt-user?user_id=${encodeURIComponent(user.sub)}`);
+      const data = await resp.json();
 
-      // 2) Profilo lato server (Management API via M2M) — passiamo il sub in query
-      mgmtHeader.innerHTML = "Recupero profilo Management API…";
-      mgmtBox.textContent = "";
-      try {
-        const res = await fetch(`/.netlify/functions/mgmt-user?sub=${encodeURIComponent(user.sub)}`);
-        const data = await res.json();
+      // Render
+      document.title = `Ciao, ${user.name || user.email}`;
+      log({
+        greeting: `Benvenuto ${user.name || user.email}`,
+        client_user: user,
+        mgmt_user: data
+      });
 
-        if (!res.ok) {
-          mgmtHeader.innerHTML = `<strong>Errore Management API</strong>`;
-          mgmtBox.textContent = JSON.stringify(data, null, 2);
-          return;
-        }
-
-        const headerName = data.name || data.nickname || data.email || data.user_id || "Utente";
-        const headerPic = data.picture ? `<img class="avatar" src="${data.picture}" alt="avatar">` : "";
-        mgmtHeader.innerHTML = `${headerPic}<strong>${headerName}</strong>`;
-
-        // Mostra “il resto”: email, verified, logins_count, last_login, identities…
-        mgmtBox.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        mgmtHeader.innerHTML = `<strong>Errore chiamando mgmt-user</strong>`;
-        mgmtBox.textContent = (e?.message || String(e));
-      }
+    } catch (e) {
+      console.error(e);
+      log({ error: e.message || String(e) });
     }
-
-    loginBtn.onclick = async () => {
-      try {
-        await auth0.loginWithPopup(); // niente redirect, niente callback
-      } catch (e) {
-        alert("Login fallito: " + (e?.error_description || e?.message || e));
-      }
-      render();
-    };
-
-    logoutBtn.onclick = async () => {
-      await auth0.logout({ logoutParams: { returnTo: window.location.origin } });
-      render();
-    };
-
-    // Render iniziale (se sessione valida, resta loggato)
-    render();
   </script>
 </body>
 </html>
