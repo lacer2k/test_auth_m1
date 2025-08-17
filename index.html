@@ -86,7 +86,7 @@
 
         if (!authed) {
           log("Triggering loginWithRedirect…");
-          await auth0.loginWithRedirect();
+          await auth0.loginWithRedirect({authorizationParams: { redirect_uri: window.location.origin + "/callback" }});
           return;
         }
 
