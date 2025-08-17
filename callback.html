@@ -5,8 +5,9 @@
   <title>Completing login…</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 2rem; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding:2rem; }
     #log { background:#f6f8fa; padding:1rem; border-radius:8px; max-width:900px; white-space:pre-wrap; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   </style>
 </head>
 <body>
@@ -15,56 +16,52 @@
 
   <script type="module">
     import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
-
     const logEl = document.getElementById('log');
     const log = (...a) => { console.log(...a); logEl.textContent += a.join(' ') + "\n"; };
 
-    const params = new URLSearchParams(window.location.search);
-    const hasParams = params.has('code') && params.has('state');
+    const p = new URLSearchParams(window.location.search);
+    log("URL:", window.location.href);
+    log("code?", p.has('code'), "state?", p.has('state'));
 
-    (async () => {
+    if (!(p.has('code') && p.has('state'))) {
+      log("No code/state: redirecting to /");
+      window.location.replace("/");
+    } else {
       try {
-        if (!hasParams) {
-          log("No code/state on URL → someone opened /callback directly. Going home.");
-          window.location.replace("/");
-          return;
-        }
-
         log("Init Auth0 client…");
         const auth0 = await createAuth0Client({
-          domain: "dev-ppsnetwf.us.auth0.com",            // ✅ your tenant
-          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",    // ✅ your SPA client ID
-          authorizationParams: {
-            redirect_uri: window.location.origin + "/callback"
-          },
-          // Safari/ITP can be prickly; localstorage is safer across redirects:
+          domain: "dev-ppsnetwf.us.auth0.com",            // 👈 your tenant
+          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",    // 👈 SPA client ID
+          authorizationParams: { redirect_uri: window.location.origin + "/callback" },
           cacheLocation: "localstorage",
           useRefreshTokens: true
         });
 
-        log("Handling redirect callback…");
-        // Add a timeout so “hangs” surface clearly
-        const withTimeout = (p, ms, label) => Promise.race([
-          p, new Promise((_, rej) => setTimeout(() => rej(new Error(label+" timed out")), ms))
-        ]);
-        const result = await withTimeout(auth0.handleRedirectCallback(), 12000, "handleRedirectCallback");
-        log("Callback handled. appState:", JSON.stringify(result?.appState || null));
+        const withTimeout = (promise, ms, label) =>
+          Promise.race([promise, new Promise((_, rej)=>setTimeout(()=>rej(new Error(label+" timed out after "+ms+"ms")), ms))]);
 
-        const user = await auth0.getUser().catch(() => null);
+        log("Calling handleRedirectCallback…");
+        const result = await withTimeout(auth0.handleRedirectCallback(), 12000, "handleRedirectCallback");
+        log("Callback OK. appState:", JSON.stringify(result?.appState || null));
+
+        const user = await auth0.getUser().catch(()=>null);
         log("User:", JSON.stringify(user));
 
         // Clean URL then go home
         window.history.replaceState({}, document.title, "/");
+        log("Redirecting to /");
         window.location.replace("/");
-      } catch (err) {
-        log("ERROR:", err?.message || String(err));
-        log("Stack:", err?.stack || "(no stack)");
-        log("Hints:\n• Ensure Allowed Callback URLs includes EXACTLY: " + window.location.origin + "/callback"
-            + "\n• The login() used the SAME redirect_uri"
-            + "\n• netlify.toml is not rewriting /callback to /index.html"
-            + "\n• No mixed domains (stick to your *.netlify.app while testing).");
+      } catch (e) {
+        log("ERROR:", e.message || String(e));
+        log("Stack:", e.stack || "(no stack)");
+        log("\nChecks:\n"+
+            "1) Auth0 → SPA App → Allowed Callback URLs includes EXACT: "+window.location.origin+"/callback\n"+
+            "2) Auth0 → SPA App → Allowed Web Origins includes: "+window.location.origin+"\n"+
+            "3) App type is 'Single Page Application' with 'Authorization Code (PKCE)' enabled\n"+
+            "4) netlify.toml has the /callback → /callback.html rule above the SPA fallback\n"+
+            "5) Same domain through whole flow (stick to *.netlify.app while testing)\n");
       }
-    })();
+    }
   </script>
 </body>
 </html>
