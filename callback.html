@@ -3,65 +3,50 @@
 <head>
   <meta charset="utf-8" />
   <title>Completing login…</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 2rem;">
+<body>
   <h1>Completing login…</h1>
-  <pre id="log" style="background:#f6f8fa;padding:1rem;border-radius:8px;max-width:800px;overflow:auto;"></pre>
+  <pre id="log"></pre>
 
   <script type="module">
-    const logEl = document.getElementById('log');
-    const log = (...args) => { console.log(...args); logEl.textContent += args.join(' ') + "\n"; };
+    import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
 
-    const hasParams = () => {
-      const p = new URLSearchParams(window.location.search);
-      return p.has('code') && p.has('state');
-    };
+    const log = (...a) => (document.getElementById('log').textContent += a.join(' ') + "\n");
 
     (async () => {
       try {
-        // 0) Ensure the redirect actually brought code/state
-        if (!hasParams()) {
-          log("No code/state found on the URL. Redirecting home.");
-          // If someone hit /callback directly, just go home.
+        // Bail out if someone hits /callback without query params
+        const p = new URLSearchParams(window.location.search);
+        if (!(p.has('code') && p.has('state'))) {
+          log("No code/state found. Redirecting home.");
           window.location.replace("/");
           return;
         }
 
-        // 1) Load Auth0 SPA SDK
-        log("Loading Auth0 SDK…");
-        const mod = await import("https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js");
-        const createAuth0Client = mod.default || mod;
-
-        // 2) Init client (USE YOUR SPA CLIENT + DOMAIN)
+        log("Init Auth0…");
         const auth0 = await createAuth0Client({
-          domain: "dev-ppsnetwf.us.auth0.com",     // ← replace
-          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",         // ← replace
+          domain: "dev-ppsnetwf.us.auth0.com",        // ✅ your SPA tenant
+          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",// ✅ your SPA client ID
           authorizationParams: {
-            redirect_uri: window.location.origin  // or origin + "/callback" if that’s your flow
+            redirect_uri: window.location.origin + "/callback"
           },
           cacheLocation: "memory",
           useRefreshTokens: true
         });
-        log("Auth0 client initialized.");
 
-        // 3) Handle redirect once
-        log("Handling redirect callback…");
-        const result = await auth0.handleRedirectCallback();
-        log("Callback handled. AppState:", JSON.stringify(result?.appState || null));
+        log("Handling redirect…");
+        await auth0.handleRedirectCallback();
 
-        // 4) Optional: inspect user
+        // (Optional) peek at user
         const user = await auth0.getUser();
-        log("User:", JSON.stringify(user, null, 2));
+        log("User loaded:", JSON.stringify(user || null));
 
-        // 5) Clean URL and go home
+        // Clean URL then go home
         window.history.replaceState({}, document.title, "/");
         window.location.replace("/");
       } catch (err) {
         console.error(err);
-        log("ERROR:", err?.message || String(err));
-        log("Stack:", err?.stack || "no stack");
-        log("Tip: check SPA Client ID, Domain, and Auth0 ‘Allowed Callback URLs’.");
+        log("ERROR:", err.message || String(err));
       }
     })();
   </script>
