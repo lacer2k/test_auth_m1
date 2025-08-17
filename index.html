@@ -36,6 +36,34 @@
           <h1>Welcome, ${user.name}</h1>
           <pre>${JSON.stringify(user, null, 2)}</pre>
         `;
+        
+        <script>
+async function showAuthed(user) {
+  userNameEl.textContent = user?.name || user?.email || 'User';
+  userEmailEl.textContent = user?.email || '';
+  loginSection.style.display = 'none';
+  authenticatedSection.style.display = 'block';
+  startClock();
+
+  // 🔹 CHIAMATA ALLA FUNZIONE mgmt-user
+  try {
+    const res = await fetch('/.netlify/functions/mgmt-user');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    console.log("Mgmt-user data:", data);
+
+    // se vuoi mostrare qualcosa in pagina
+    const mgmtEl = document.createElement('pre');
+    mgmtEl.textContent = JSON.stringify(data, null, 2);
+    authenticatedSection.appendChild(mgmtEl);
+  } catch (err) {
+    console.error("Errore chiamando mgmt-user:", err);
+  }
+}
+</script>
+        
+        
       }
     }
 
