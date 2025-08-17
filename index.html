@@ -1,56 +1,41 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Auth0 Simple Demo</title>
-  <script src="/vendor/auth0-spa-js.production.js"></script>
-</head>
-<body>
-  <h1>Auth0 Login Demo</h1>
-  <button id="login">Login</button>
-  <button id="logout" style="display:none">Logout</button>
-  <pre id="profile">Not logged in</pre>
+<script type="module">
+  import { createAuth0Client } from '/vendor/auth0-spa-js.production.esm.js';
 
-  <script>
-    const auth0Client = await createAuth0Client({
-      domain: "dev-ppsnetwf.us.auth0.com",   // 🔑 il tuo tenant
-      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj", // 🔑 client SPA
-      authorizationParams: {
-        redirect_uri: window.location.origin,
-        scope: "openid profile email"
-      },
-      cacheLocation: "localstorage",
-      useRefreshTokens: true
+  const DOMAIN = "dev-ppsnetwf.us.auth0.com";
+  const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+  const REDIRECT_URI = window.location.origin + "/";
+
+  async function go() {
+    const auth0 = await createAuth0Client({
+      domain: DOMAIN,
+      clientId: CLIENT_ID,
+      authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
     });
 
-    // --- Gestione callback Auth0 (dopo login)
-    if (window.location.search.includes("code=") && window.location.search.includes("state=")) {
-      await auth0Client.handleRedirectCallback();
-      window.history.replaceState({}, document.title, "/");
+    if (window.location.search.includes("code=")) {
+      await auth0.handleRedirectCallback();
+      history.replaceState({}, document.title, "/");
     }
 
-    // --- Controlla se utente già loggato
-    if (await auth0Client.isAuthenticated()) {
-      const user = await auth0Client.getUser();
-      document.getElementById("profile").textContent = JSON.stringify(user, null, 2);
-      document.getElementById("login").style.display = "none";
-      document.getElementById("logout").style.display = "inline-block";
-
-      // --- Call Netlify Function (M2M Management API)
-      const res = await fetch("/.netlify/functions/mgmt-user?user_id=" + encodeURIComponent(user.sub));
-      const data = await res.json();
-      document.getElementById("profile").textContent += "\n\n[Mgmt API]\n" + JSON.stringify(data, null, 2);
+    const isAuthed = await auth0.isAuthenticated();
+    if (!isAuthed) {
+      return auth0.loginWithRedirect();
     }
 
-    // --- Login
-    document.getElementById("login").addEventListener("click", async () => {
-      await auth0Client.loginWithRedirect();
-    });
+    // 👇 qui dopo login
+    const user = await auth0.getUser();
+    console.log("ID Token user:", user);
 
-    // --- Logout
-    document.getElementById("logout").addEventListener("click", async () => {
-      await auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-    });
-  </script>
-</body>
-</html>
+    // 👇 chiamata al tuo endpoint serverless
+    const res = await fetch("/.netlify/functions/mgmt-user");
+    const data = await res.json();
+    console.log("Management API user:", data);
+
+    document.body.innerHTML = `
+      <h1>Benvenuto ${data.user?.name || user.name}</h1>
+      <pre>${JSON.stringify(data, null, 2)}</pre>
+    `;
+  }
+
+  go();
+</script>
