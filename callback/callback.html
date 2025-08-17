@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Logging in…</title>
+  <script type="module">
+    import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        // Initialize Auth0 client
+        const auth0 = await createAuth0Client({
+          domain: "dev-ppsnetwf.us.auth0.com",          // 👈 replace
+          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",              // 👈 replace
+          authorizationParams: {
+            redirect_uri: window.location.origin       // 👈 adjust if needed
+          },
+          cacheLocation: "memory",
+          useRefreshTokens: true
+        });
+
+        // Handle the redirect once
+        await auth0.handleRedirectCallback();
+
+        // Optional: store login state in localStorage
+        const user = await auth0.getUser();
+        localStorage.setItem("auth_user", JSON.stringify(user));
+
+        // Clean up query string
+        window.history.replaceState({}, document.title, "/");
+
+        // Redirect home (or wherever)
+        window.location.replace("/");
+      } catch (err) {
+        console.error("Callback error:", err);
+        document.body.innerHTML = "<h2>Login failed</h2><pre>" + err.message + "</pre>";
+      }
+    });
+  </script>
+</head>
+<body>
+  <h1>Completing login…</h1>
+</body>
+</html>
