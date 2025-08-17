@@ -1,124 +1,39 @@
-<!DOCTYPE html>
-<html lang="it">
+<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Auth0 Debug Safe Mode</title>
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 script-src 'self' 'unsafe-inline';
-                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com https://*.auth0.com;
-                 style-src 'self' 'unsafe-inline';
-                 img-src 'self' data:;
-                 frame-src https://*.auth0.com https://*.us.auth0.com;">
-  <style>
-    body { font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; }
-    button { padding:.6rem 1rem; border-radius:8px; border:0; cursor:pointer; margin-right:8px; }
-    .primary { background:#4f46e5; color:#fff; }
-    pre { background:#0b1020; color:#c9f7ff; padding:12px; border-radius:8px; min-height:120px; }
-  </style>
+  <title>Auth0 Minimal SPA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body>
-  <h1>Auth0 Debug Safe Mode</h1>
-  <p>
-    <button id="btn-init" class="primary">Init Auth</button>
-    <button id="btn-mgmt">Call mgmt-user</button>
-  </p>
-  <h3>Log</h3>
-  <pre id="log">Ready.</pre>
+<body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding:2rem;">
+  <h1>Auth0 Minimal SPA</h1>
+  <button id="login">Login</button>
+  <pre id="log" style="background:#f6f8fa;padding:1rem;border-radius:8px;max-width:900px;white-space:pre-wrap;"></pre>
 
   <script type="module">
+    import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
     const logEl = document.getElementById('log');
-    const log = (msg) => logEl.textContent += "\n" + (typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2));
+    const log = (...a) => { console.log(...a); logEl.textContent += a.join(' ') + "\n"; };
 
-    const DOMAIN = "dev-ppsnetwf.us.auth0.com";
-    const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
-    const REDIRECT_URI = window.location.origin + "/callback";
+    const auth0 = await createAuth0Client({
+      domain: "dev-ppsnetwf.us.auth0.com",           // 👈 your tenant
+      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",   // 👈 SPA client ID
+      authorizationParams: {
+        redirect_uri: window.location.origin + "/callback"
+      },
+      cacheLocation: "localstorage",
+      useRefreshTokens: true
+    });
+    log("Init OK. origin:", window.location.origin);
 
-    let auth0, claims;
-
-    async function loadSDK() {
-      try {
-        log("Importing ESM…");
-        const mod = await import('/vendor/auth0-spa-js.production.esm.js');
-        if (typeof mod.createAuth0Client !== 'function') throw new Error('ESM missing createAuth0Client');
-        log("ESM OK");
-        return mod;
-      } catch (e) {
-        log("ESM failed: " + e);
-        log("Trying UMD …");
-        await new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = '/vendor/auth0-spa-js.production.js';
-          s.onload = resolve;
-          s.onerror = reject;
-          document.head.appendChild(s);
-        });
-        if (typeof window.createAuth0Client !== 'function') throw new Error('UMD missing createAuth0Client');
-        log("UMD OK");
-        return { createAuth0Client: window.createAuth0Client };
-      }
-    }
-
-    async function initAuth() {
-      try {
-        const { createAuth0Client } = await loadSDK();
-        auth0 = await createAuth0Client({
-          domain: DOMAIN,
-          clientId: CLIENT_ID,
-          authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
-        });
-        log("Auth0 client created.");
-
-        const url = new URL(window.location.href);
-        const isCallback = url.pathname === "/callback";
-        const hasAuthParams = ["code","state","error"].some(k => url.searchParams.has(k));
-
-        if (isCallback && hasAuthParams) {
-          log("Handling callback…");
-          await auth0.handleRedirectCallback();
-          log("Callback handled. Redirecting to / …");
-          window.location.replace(window.location.origin + "/");
-          return;
+    document.getElementById("login").onclick = async () => {
+      log("Redirecting to Auth0 login…");
+      await auth0.loginWithRedirect({
+        authorizationParams: {
+          redirect_uri: window.location.origin + "/callback"
         }
-
-        const authed = await auth0.isAuthenticated();
-        log("isAuthenticated: " + authed);
-
-        if (!authed) {
-          log("Triggering loginWithRedirect…");
-          await auth0.loginWithRedirect({authorizationParams: { redirect_uri: window.location.origin + "/callback" }});
-          return;
-        }
-
-        const c = await auth0.getIdTokenClaims();
-        claims = {
-          name: c.name, email: c.email, sub: c.sub,
-          email_verified: c.email_verified, __raw: c.__raw
-        };
-        log(["Claims:", claims]);
-      } catch (err) {
-        log("ERROR initAuth: " + (err?.message || err));
-      }
-    }
-
-    async function callMgmt() {
-      try {
-        if (!auth0) return log("Init first.");
-        if (!claims) return log("No claims. Click Init Auth and finish login.");
-        const res = await fetch('/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub), {
-          headers: { Authorization: 'Bearer ' + claims.__raw }
-        });
-        log("mgmt-user status: " + res.status);
-        const txt = await res.text();
-        try { log(JSON.parse(txt)); } catch { log(txt); }
-      } catch (e) {
-        log("ERROR callMgmt: " + (e?.message || e));
-      }
-    }
-
-    document.getElementById('btn-init').onclick = initAuth;
-    document.getElementById('btn-mgmt').onclick = callMgmt;
-    log("Click 'Init Auth' to start. Watch the log here for errors.");
+      });
+    };
   </script>
 </body>
 </html>
