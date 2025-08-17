@@ -11,21 +11,6 @@ curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.product
   -o vendor/auth0-spa-js.production.esm.js
 """
 
-# ✅ Lascia passare il callback di Auth0 (nessun guard)
-[[edge_functions]]
-path = "/callback"
-function = "noop"
-
-# 🔒 Proteggi TUTTE le Netlify Functions (richiede id_token)
-[[edge_functions]]
-path = "/.netlify/functions/*"
-function = "protect"
-
-# 🔒 (Opzionale) proteggi la cartella /private/*
-[[edge_functions]]
-path = "/private/*"
-function = "protect"
-
 # SPA fallback (tienilo per ultimo)
 [[redirects]]
 from = "/*"
