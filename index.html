@@ -1,19 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <title>Auth0 Login Demo</title>
+  <title>Auth0 Auto Login</title>
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
 </head>
 <body>
-  <h1>Auth0 Login Test</h1>
-  <button id="login">Login</button>
-  <button id="logout">Logout</button>
+  <h1>Benvenuto</h1>
   <pre id="profile"></pre>
 
   <script>
     const auth0Domain = "dev-ppsnetwf.us.auth0.com";
-    const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj"; // Public ID, safe in frontend
+    const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     let auth0Client = null;
 
     async function configureClient() {
@@ -27,12 +25,17 @@
     }
 
     async function processLogin() {
-      // Handle callback from Auth0
       const query = window.location.search;
+
       if (query.includes("code=") && query.includes("state=")) {
+        // Callback dopo login
         await auth0Client.handleRedirectCallback();
-        window.history.replaceState({}, document.title, "/"); // Clean URL
+        window.history.replaceState({}, document.title, "/"); 
+      } else {
+        // Non loggato → forza redirect immediato
+        await auth0Client.loginWithRedirect();
       }
+
       updateUI();
     }
 
@@ -41,22 +44,12 @@
       if (isAuthenticated) {
         const user = await auth0Client.getUser();
         document.getElementById("profile").textContent = JSON.stringify(user, null, 2);
-      } else {
-        document.getElementById("profile").textContent = "Not logged in.";
       }
     }
 
     window.onload = async () => {
       await configureClient();
       await processLogin();
-
-      document.getElementById("login").onclick = () => {
-        auth0Client.loginWithRedirect();
-      };
-
-      document.getElementById("logout").onclick = () => {
-        auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
-      };
     };
   </script>
 </body>
