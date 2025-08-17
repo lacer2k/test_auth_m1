@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <title>Completing login…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 2rem; }
+    #log { background:#f6f8fa; padding:1rem; border-radius:8px; max-width:900px; white-space:pre-wrap; }
+  </style>
 </head>
 <body>
   <h1>Completing login…</h1>
@@ -11,42 +16,53 @@
   <script type="module">
     import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js";
 
-    const log = (...a) => (document.getElementById('log').textContent += a.join(' ') + "\n");
+    const logEl = document.getElementById('log');
+    const log = (...a) => { console.log(...a); logEl.textContent += a.join(' ') + "\n"; };
+
+    const params = new URLSearchParams(window.location.search);
+    const hasParams = params.has('code') && params.has('state');
 
     (async () => {
       try {
-        // Bail out if someone hits /callback without query params
-        const p = new URLSearchParams(window.location.search);
-        if (!(p.has('code') && p.has('state'))) {
-          log("No code/state found. Redirecting home.");
+        if (!hasParams) {
+          log("No code/state on URL → someone opened /callback directly. Going home.");
           window.location.replace("/");
           return;
         }
 
-        log("Init Auth0…");
+        log("Init Auth0 client…");
         const auth0 = await createAuth0Client({
-          domain: "dev-ppsnetwf.us.auth0.com",        // ✅ your SPA tenant
-          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",// ✅ your SPA client ID
+          domain: "dev-ppsnetwf.us.auth0.com",            // ✅ your tenant
+          clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",    // ✅ your SPA client ID
           authorizationParams: {
             redirect_uri: window.location.origin + "/callback"
           },
-          cacheLocation: "memory",
+          // Safari/ITP can be prickly; localstorage is safer across redirects:
+          cacheLocation: "localstorage",
           useRefreshTokens: true
         });
 
-        log("Handling redirect…");
-        await auth0.handleRedirectCallback();
+        log("Handling redirect callback…");
+        // Add a timeout so “hangs” surface clearly
+        const withTimeout = (p, ms, label) => Promise.race([
+          p, new Promise((_, rej) => setTimeout(() => rej(new Error(label+" timed out")), ms))
+        ]);
+        const result = await withTimeout(auth0.handleRedirectCallback(), 12000, "handleRedirectCallback");
+        log("Callback handled. appState:", JSON.stringify(result?.appState || null));
 
-        // (Optional) peek at user
-        const user = await auth0.getUser();
-        log("User loaded:", JSON.stringify(user || null));
+        const user = await auth0.getUser().catch(() => null);
+        log("User:", JSON.stringify(user));
 
         // Clean URL then go home
         window.history.replaceState({}, document.title, "/");
         window.location.replace("/");
       } catch (err) {
-        console.error(err);
-        log("ERROR:", err.message || String(err));
+        log("ERROR:", err?.message || String(err));
+        log("Stack:", err?.stack || "(no stack)");
+        log("Hints:\n• Ensure Allowed Callback URLs includes EXACTLY: " + window.location.origin + "/callback"
+            + "\n• The login() used the SAME redirect_uri"
+            + "\n• netlify.toml is not rewriting /callback to /index.html"
+            + "\n• No mixed domains (stick to your *.netlify.app while testing).");
       }
     })();
   </script>
