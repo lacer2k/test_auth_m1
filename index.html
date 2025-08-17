@@ -2,54 +2,173 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <title>Auth0 Auto Login</title>
+  <title>Auth0 Auto Login + Tokens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin-bottom: 16px; }
+    button { border: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer; background: #111827; color: #fff; }
+    .muted { color: #475569; font-size: 14px; }
+    .ok { color: #16a34a; font-weight: 600; }
+    .bad { color: #dc2626; font-weight: 600; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  </style>
 </head>
 <body>
-  <h1>Benvenuto</h1>
-  <pre id="profile"></pre>
+  <h1>Auth0 Login (auto) + Token Viewer</h1>
+  <p class="muted">
+    Dominio: <code>dev-ppsnetwf.us.auth0.com</code> — Client ID: <code>v8SikCjLbbH0ioHuoKSkADBHcofOOWHj</code>
+  </p>
+
+  <div id="status" class="muted">Stato: inizializzazione…</div>
+  <div style="margin: 12px 0;">
+    <button id="logout" style="display:none">Logout</button>
+  </div>
+
+  <div class="row">
+    <h3 style="margin:0">Profilo utente</h3>
+    <button data-copy="#profile">Copia</button>
+  </div>
+  <pre id="profile">—</pre>
+
+  <div class="row">
+    <h3 style="margin:0">Access Token</h3>
+    <button data-copy="#accessToken">Copia</button>
+  </div>
+  <pre id="accessToken">—</pre>
+
+  <div class="row">
+    <h3 style="margin:0">ID Token (JWT)</h3>
+    <button data-copy="#idToken">Copia</button>
+  </div>
+  <pre id="idToken">—</pre>
 
   <script>
     const auth0Domain = "dev-ppsnetwf.us.auth0.com";
     const clientId = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
+
+    // Se hai definito un'API in Auth0 e vuoi un access token JWT per quella API, imposta l'audience qui:
+    // Esempio: const audience = "https://api.mysaas.com";
+    const audience = null; // <— lascia null se non ti serve
+
     let auth0Client = null;
+
+    function setStatus(msg, ok = null) {
+      const el = document.getElementById("status");
+      el.textContent = "Stato: " + msg;
+      el.className = ok === true ? "ok" : ok === false ? "bad" : "muted";
+    }
 
     async function configureClient() {
       auth0Client = await createAuth0Client({
         domain: auth0Domain,
         clientId: clientId,
+        cacheLocation: "localstorage",       // utile in dev/Netlify; rimuovi se non ti serve
+        useRefreshTokens: true,              // rinnovo silenzioso
         authorizationParams: {
-          redirect_uri: window.location.origin
+          redirect_uri: window.location.origin,
+          // scopes base per profilo
+          scope: "openid profile email" + (audience ? " offline_access" : ""),
+          ...(audience ? { audience } : {})
         }
       });
     }
 
-    async function processLogin() {
-      const query = window.location.search;
+    function bindCopyButtons() {
+      document.querySelectorAll("button[data-copy]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const sel = btn.getAttribute("data-copy");
+          const box = document.querySelector(sel);
+          if (!box) return;
+          navigator.clipboard.writeText(box.textContent || "").then(() => {
+            const old = btn.textContent;
+            btn.textContent = "Copiato ✓";
+            setTimeout(() => (btn.textContent = old), 800);
+          });
+        });
+      });
+    }
 
-      if (query.includes("code=") && query.includes("state=")) {
-        // Callback dopo login
-        await auth0Client.handleRedirectCallback();
-        window.history.replaceState({}, document.title, "/"); 
-      } else {
-        // Non loggato → forza redirect immediato
-        await auth0Client.loginWithRedirect();
+    function pretty(objOrString) {
+      try {
+        if (typeof objOrString === "string") {
+          // prova a decodificare JWT in modo leggibile (payload base64)
+          if (objOrString.split(".").length === 3) {
+            const [, payload] = objOrString.split(".");
+            const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+            return JSON.stringify({ raw: objOrString, payload: json }, null, 2);
+          }
+          return objOrString;
+        }
+        return JSON.stringify(objOrString, null, 2);
+      } catch {
+        return String(objOrString);
       }
-
-      updateUI();
     }
 
     async function updateUI() {
       const isAuthenticated = await auth0Client.isAuthenticated();
-      if (isAuthenticated) {
-        const user = await auth0Client.getUser();
-        document.getElementById("profile").textContent = JSON.stringify(user, null, 2);
+      document.getElementById("logout").style.display = isAuthenticated ? "inline-block" : "none";
+
+      if (!isAuthenticated) {
+        setStatus("non autenticato — redirigo al login…");
+        // forza login
+        await auth0Client.loginWithRedirect();
+        return;
+      }
+
+      setStatus("autenticato ✅", true);
+
+      // Profilo utente
+      const user = await auth0Client.getUser();
+      document.getElementById("profile").textContent = pretty(user || {});
+
+      // Access Token (può essere opaco se non specifichi un audience)
+      try {
+        const accessToken = await auth0Client.getTokenSilently(
+          audience ? { authorizationParams: { audience } } : {}
+        );
+        document.getElementById("accessToken").textContent = pretty(accessToken || "—");
+      } catch (e) {
+        document.getElementById("accessToken").textContent = "Errore nel recupero access token:\n" + e.message;
+      }
+
+      // ID Token (JWT)
+      try {
+        const claims = await auth0Client.getIdTokenClaims();
+        const idTokenRaw = claims && claims.__raw ? claims.__raw : null;
+        document.getElementById("idToken").textContent = pretty(idTokenRaw || claims || "—");
+      } catch (e) {
+        document.getElementById("idToken").textContent = "Errore nel recupero ID token:\n" + e.message;
       }
     }
 
     window.onload = async () => {
-      await configureClient();
-      await processLogin();
+      bindCopyButtons();
+      try {
+        setStatus("configuro client…");
+        await configureClient();
+
+        // Se rientri dal callback (code, state)
+        const qs = window.location.search;
+        if (qs.includes("code=") && qs.includes("state=")) {
+          setStatus("gestisco callback…");
+          await auth0Client.handleRedirectCallback();
+          // pulizia URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        await updateUI();
+      } catch (e) {
+        console.error(e);
+        setStatus("errore: " + e.message, false);
+      }
+
+      document.getElementById("logout").onclick = () => {
+        auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+      };
     };
   </script>
 </body>
