@@ -7,11 +7,9 @@ mkdir -p vendor
 echo 'Downloading Auth0 SPA SDK locally…'
 curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.js \
   -o vendor/auth0-spa-js.production.js
-curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.esm.js \
-  -o vendor/auth0-spa-js.production.esm.js
 """
 
-# SPA fallback (tienilo per ultimo)
+# SPA fallback: tutte le route servono index.html
 [[redirects]]
 from = "/*"
 to = "/index.html"
