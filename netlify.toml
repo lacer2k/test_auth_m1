@@ -16,6 +16,10 @@ curl -fsSL https://unpkg.com/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.product
 path = "/private/*"
 function = "protect"
 
+[[edge_functions]]
+path = "/.netlify/functions/*"
+function = "protect"
+
 # SPA fallback (keep this last)
 [[redirects]]
 from = "/*"
