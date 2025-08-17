@@ -1,76 +1,192 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
   <meta charset="utf-8" />
-  <title>Redirecting to Auth0…</title>
-  <script type="module">
-    import { createAuth0Client } from '/vendor/auth0-spa-js.production.esm.js';
+  <title>Login…</title>
 
+  <!-- CSP semplice: consente moduli JS locali e chiamate al tenant Auth0 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline';
+                 connect-src 'self' https://dev-ppsnetwf.us.auth0.com;
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data:;
+                 frame-src https://*.auth0.com;">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; line-height: 1.4; }
+    pre { background: #0b1020; color: #c9f7ff; padding: 12px; border-radius: 8px; overflow:auto; }
+    .muted { opacity:.7; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .err { color:#b91c1c; }
+    .ok  { color:#065f46; }
+    a.btn { display:inline-block; padding:.5rem .9rem; background:#ef4444; color:#fff; text-decoration:none; border-radius:8px; }
+  </style>
+
+  <script>
+    // Fallback UMD loader (se l'import ESM fallisce)
+    async function loadAuth0UMD() {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = '/vendor/auth0-spa-js.production.js';
+        s.onload = () => {
+          if (typeof window.createAuth0Client === 'function') resolve({ createAuth0Client: window.createAuth0Client });
+          else reject(new Error('UMD loaded but createAuth0Client is missing'));
+        };
+        s.onerror = () => reject(new Error('UMD script load failed'));
+        document.head.appendChild(s);
+      });
+    }
+  </script>
+
+  <script type="module">
+    // === CONFIG ===
     const DOMAIN = "dev-ppsnetwf.us.auth0.com";
     const CLIENT_ID = "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj";
     const REDIRECT_URI = window.location.origin + "/";
 
-    async function go() {
+    const ui = {
+      set(html) {
+        document.body.innerHTML = html;
+        this.status = document.getElementById('status');
+        this.out = document.getElementById('out');
+        const logout = document.getElementById('logout');
+        if (logout) {
+          logout.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (window.__auth0) {
+              window.__auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+            }
+          });
+        }
+      },
+      log(x) { if (this.out) this.out.textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); },
+      statusText(t, cls = '') { if (this.status) { this.status.textContent = t; this.status.className = cls; } },
+      renderLoggedIn(user) {
+        this.set(`
+          <div class="row">
+            <h1 style="margin:0;">Welcome, ${user.name || user.email || 'User'}</h1>
+            <span class="muted">SPA → Netlify Function → Auth0 Management API</span>
+          </div>
+          <p><strong>Status:</strong> <span id="status" class="ok">Logged in</span></p>
+          <p><a href="#" id="logout" class="btn">Logout</a></p>
+
+          <h3>ID Token claims</h3>
+          <pre id="claims">Loading…</pre>
+
+          <h3>Management API profile</h3>
+          <pre id="out">Loading…</pre>
+        `);
+        const claimsEl = document.getElementById('claims');
+        claimsEl.textContent = JSON.stringify(user, null, 2);
+      },
+      renderError(title, err) {
+        this.set(`
+          <h1 class="err">${title}</h1>
+          <pre id="out"></pre>
+          <p class="muted">Apri la Console/Network per dettagli. Verifica anche /vendor/ files (200 OK) e callback URLs su Auth0.</p>
+        `);
+        this.log(String(err));
+      },
+      renderRedirecting() {
+        this.set(`<p>Redirecting you to Auth0 login…</p>`);
+      },
+      renderBoot() {
+        this.set(`<p><strong>Status:</strong> <span id="status">Booting…</span></p><pre id="out">Ready.</pre>`);
+      }
+    };
+
+    ui.renderBoot();
+
+    async function loadSDK() {
+      try {
+        // 1) Prova ESM locale
+        const mod = await import('/vendor/auth0-spa-js.production.esm.js');
+        if (typeof mod.createAuth0Client !== 'function') throw new Error('ESM loaded without createAuth0Client');
+        return mod;
+      } catch (e) {
+        console.warn('[Auth0] ESM import failed:', e);
+        // 2) Fallback UMD
+        return await loadAuth0UMD();
+      }
+    }
+
+    async function main() {
+      const { createAuth0Client } = await loadSDK();
+
       const auth0 = await createAuth0Client({
         domain: DOMAIN,
         clientId: CLIENT_ID,
         authorizationParams: { redirect_uri: REDIRECT_URI, scope: "openid profile email" }
       });
+      window.__auth0 = auth0; // per logout
 
+      // Handle Auth0 callback
       const qs = new URLSearchParams(window.location.search);
-
-      // Handle callback (after Auth0 redirects back)
       if (qs.has("code") || qs.has("error")) {
-        try { await auth0.handleRedirectCallback(); }
-        finally { history.replaceState({}, document.title, window.location.pathname); }
+        try {
+          await auth0.handleRedirectCallback();
+        } catch (err) {
+          ui.renderError('Auth0 callback error', err);
+          return;
+        } finally {
+          history.replaceState({}, document.title, window.location.pathname);
+        }
       }
 
-      const authed = await auth0.isAuthenticated();
-      if (!authed) {
-        // 🚀 Immediately send to Auth0 login
-        await auth0.loginWithRedirect();
-      } else {
-        // Already logged in → show user profile
-        const user = await auth0.getUser();
-        document.body.innerHTML = `
-          <h1>Welcome, ${user.name}</h1>
-          <pre>${JSON.stringify(user, null, 2)}</pre>
-        `;
-        
-        <script>
-async function showAuthed(user) {
-  userNameEl.textContent = user?.name || user?.email || 'User';
-  userEmailEl.textContent = user?.email || '';
-  loginSection.style.display = 'none';
-  authenticatedSection.style.display = 'block';
-  startClock();
+      // Check session
+      let isAuthed = false;
+      try {
+        isAuthed = await auth0.isAuthenticated();
+      } catch (err) {
+        ui.renderError('isAuthenticated failed', err);
+        return;
+      }
 
-  // 🔹 CHIAMATA ALLA FUNZIONE mgmt-user
-  try {
-    const res = await fetch('/.netlify/functions/mgmt-user');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+      if (!isAuthed) {
+        ui.renderRedirecting();
+        await auth0.loginWithRedirect(); // naviga via
+        return;
+      }
 
-    console.log("Mgmt-user data:", data);
+      // Get claims (ID token)
+      let claims;
+      try {
+        const c = await auth0.getIdTokenClaims();
+        claims = {
+          given_name: c.given_name,
+          family_name: c.family_name,
+          nickname: c.nickname,
+          name: c.name,
+          picture: c.picture,
+          updated_at: c.updated_at,
+          email: c.email,
+          email_verified: c.email_verified,
+          sub: c.sub
+        };
+      } catch (err) {
+        ui.renderError('getIdTokenClaims() failed', err);
+        return;
+      }
 
-    // se vuoi mostrare qualcosa in pagina
-    const mgmtEl = document.createElement('pre');
-    mgmtEl.textContent = JSON.stringify(data, null, 2);
-    authenticatedSection.appendChild(mgmtEl);
-  } catch (err) {
-    console.error("Errore chiamando mgmt-user:", err);
-  }
-}
-</script>
-        
-        
+      ui.renderLoggedIn(claims);
+
+      // Call Netlify Function (Management API) con sub
+      try {
+        const url = '/.netlify/functions/mgmt-user?user_id=' + encodeURIComponent(claims.sub);
+        const res = await fetch(url);
+        const text = await res.text();
+        try { ui.log(JSON.parse(text)); } catch { ui.log(text); }
+        ui.statusText('Done', 'ok');
+      } catch (err) {
+        ui.statusText('Error', 'err');
+        ui.log({ error: String(err) });
       }
     }
 
-    go();
+    main().catch(err => ui.renderError('Init failed', err));
   </script>
 </head>
 <body>
-  <p>Redirecting you to login…</p>
+  <p>Loading…</p>
 </body>
 </html>
