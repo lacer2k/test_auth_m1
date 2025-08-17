@@ -6,8 +6,8 @@ import createAuth0Client from "https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@
 window.addEventListener("DOMContentLoaded", async () => {
   try {
     const auth0 = await createAuth0Client({
-      domain: "YOUR_TENANT.us.auth0.com",
-      clientId: "YOUR_SPA_CLIENT_ID",
+      domain: "dev-ppsnetwf.us.auth0.com",
+      clientId: "v8SikCjLbbH0ioHuoKSkADBHcofOOWHj",
       authorizationParams: { redirect_uri: window.location.origin },
       cacheLocation: "memory",
       useRefreshTokens: true
