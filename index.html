@@ -674,13 +674,12 @@
           }
 
         } else {
-          // User is not logged in - show login button
-          elements.authButtons.style.display = "flex";
-          elements.loginButton.style.display = "inline-block";
-          document.getElementById('profileHeader').style.display = "none";
-          document.getElementById('contentArea').style.display = "none";
+          // User is not logged in - auto redirect to login
+          showStatus("Redirecting to login...", false);
           
-          showStatus("Please log in to view your profile", false);
+          setTimeout(() => {
+            handleLogin();
+          }, 1000); // 1 second delay to show the status message
         }
 
       } catch (error) {
