@@ -5,111 +5,345 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Auth0 Universal Login Demo</title>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 2rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1c1e21;
+      line-height: 1.34;
+    }
+
+    .navbar {
+      background: #1877f2;
+      color: white;
+      padding: 8px 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.1);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .navbar h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
     }
 
     .container {
-      background: white;
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      max-width: 940px;
+      margin: 56px auto 0;
+      padding: 20px;
     }
 
-    h1 {
-      text-align: center;
-      color: #2c3e50;
-      margin-bottom: 2rem;
+    .profile-header {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.1);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .cover-photo {
+      height: 320px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      position: relative;
+    }
+
+    .profile-info {
+      padding: 16px 32px 24px;
+      position: relative;
+    }
+
+    .profile-picture {
+      width: 168px;
+      height: 168px;
+      border-radius: 50%;
+      border: 4px solid white;
+      position: absolute;
+      top: -84px;
+      left: 32px;
+      background: #e4e6ea;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      color: #65676b;
+      overflow: hidden;
+    }
+
+    .profile-picture img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-details {
+      margin-left: 200px;
+      margin-top: 16px;
+    }
+
+    .profile-name {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1c1e21;
+      margin-bottom: 8px;
+    }
+
+    .profile-email {
+      font-size: 15px;
+      color: #65676b;
+      margin-bottom: 16px;
     }
 
     .auth-buttons {
-      text-align: center;
-      margin-bottom: 2rem;
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
     }
 
-    button {
-      background: linear-gradient(45deg, #667eea, #764ba2);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 16px;
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
       font-weight: 600;
+      font-size: 15px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      margin: 0 10px;
+      border: none;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    .btn-primary {
+      background: #1877f2;
+      color: white;
     }
 
-    button:disabled {
+    .btn-primary:hover {
+      background: #166fe5;
+    }
+
+    .btn-secondary {
+      background: #e4e6ea;
+      color: #1c1e21;
+    }
+
+    .btn-secondary:hover {
+      background: #d8dadf;
+    }
+
+    .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
-      transform: none;
     }
 
-    .user-info {
-      background: #f8f9fa;
-      border: 1px solid #e9ecef;
+    .content-area {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 20px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: white;
       border-radius: 8px;
-      padding: 1.5rem;
-      margin-top: 1rem;
-      font-family: 'Courier New', monospace;
-      font-size: 14px;
-      white-space: pre-wrap;
-      max-height: 400px;
-      overflow-y: auto;
+      box-shadow: 0 2px 4px rgba(0,0,0,.1);
+      padding: 16px;
     }
 
-    .loading {
-      text-align: center;
-      color: #6c757d;
-      font-style: italic;
+    .card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #1c1e21;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-      border-radius: 8px;
-      padding: 1rem;
-      margin: 1rem 0;
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f2f5;
     }
 
-    .status {
-      text-align: center;
-      padding: 1rem;
-      border-radius: 8px;
-      margin: 1rem 0;
+    .info-item:last-child {
+      border-bottom: none;
+    }
+
+    .info-icon {
+      width: 20px;
+      height: 20px;
+      background: #f0f2f5;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .info-content {
+      flex: 1;
+    }
+
+    .info-label {
+      font-size: 13px;
+      color: #65676b;
+      margin-bottom: 2px;
+    }
+
+    .info-value {
+      font-size: 15px;
+      color: #1c1e21;
       font-weight: 500;
     }
 
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .stat-card {
+      background: #f0f2f5;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1877f2;
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #65676b;
+      margin-top: 4px;
+    }
+
+    .loading, .error, .status {
+      text-align: center;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+    }
+
+    .loading {
+      background: white;
+      color: #65676b;
+    }
+
+    .error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ffcdd2;
+    }
+
     .status.authenticated {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
+      background: #e8f5e8;
+      color: #2e7d32;
+      border: 1px solid #c8e6c9;
     }
 
     .status.unauthenticated {
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeaa7;
+      background: #fff3e0;
+      color: #f57c00;
+      border: 1px solid #ffcc02;
+    }
+
+    .raw-data {
+      margin-top: 20px;
+    }
+
+    .raw-data summary {
+      cursor: pointer;
+      padding: 8px 0;
+      color: #1877f2;
+      font-weight: 600;
+    }
+
+    .raw-data pre {
+      background: #f7f8fa;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-top: 8px;
+      border: 1px solid #dadde1;
+    }
+
+    .verified-badge {
+      color: #42b883;
+      font-weight: 600;
+    }
+
+    .unverified-badge {
+      color: #e74c3c;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+      
+      .content-area {
+        grid-template-columns: 1fr;
+      }
+      
+      .profile-details {
+        margin-left: 0;
+        margin-top: 100px;
+        text-align: center;
+      }
+      
+      .profile-picture {
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      
+      .cover-photo {
+        height: 200px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🔐 Auth0 Universal Login Demo</h1>
+  <!-- Navigation Bar -->
+  <div class="navbar">
+    <h1>🔐 Auth0 Profile Demo</h1>
+    <div id="navButtons" class="auth-buttons" style="display:none;"></div>
+  </div>
 
+  <div class="container">
     <!-- Loading State -->
     <div id="loading" class="loading">
       Initializing authentication...
@@ -121,14 +355,61 @@
     <!-- Status Display -->
     <div id="status" class="status" style="display:none;"></div>
 
-    <!-- Auth Buttons -->
-    <div id="authButtons" class="auth-buttons" style="display:none;">
-      <button id="loginButton">🚀 Log In</button>
-      <button id="logoutButton" style="display:none;">👋 Log Out</button>
+    <!-- Auth Buttons (when not logged in) -->
+    <div id="authButtons" class="auth-buttons" style="display:none; justify-content: center; margin-top: 100px;">
+      <button id="loginButton" class="btn btn-primary">🚀 Log In with Google</button>
     </div>
 
-    <!-- User Info -->
-    <div id="userInfo" class="user-info" style="display:none;"></div>
+    <!-- Profile Header -->
+    <div id="profileHeader" class="profile-header" style="display:none;">
+      <div class="cover-photo"></div>
+      <div class="profile-info">
+        <div id="profilePicture" class="profile-picture">👤</div>
+        <div class="profile-details">
+          <div id="profileName" class="profile-name">Loading...</div>
+          <div id="profileEmail" class="profile-email">Loading...</div>
+          <div class="auth-buttons">
+            <button id="logoutButton" class="btn btn-secondary" style="display:none;">👋 Log Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Area -->
+    <div id="contentArea" class="content-area" style="display:none;">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div id="aboutCard" class="card">
+          <h3>ℹ️ About</h3>
+          <div id="aboutContent"></div>
+        </div>
+        
+        <div id="statsCard" class="card">
+          <h3>📊 Statistics</h3>
+          <div id="statsContent"></div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <div id="identityCard" class="card">
+          <h3>🔗 Identity Provider</h3>
+          <div id="identityContent"></div>
+        </div>
+
+        <div id="securityCard" class="card">
+          <h3>🔒 Security</h3>
+          <div id="securityContent"></div>
+        </div>
+
+        <div class="card raw-data">
+          <details>
+            <summary>🔍 View Raw User Data</summary>
+            <pre id="rawDataContent"></pre>
+          </details>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Auth0 SDK - Local copy -->
@@ -231,84 +512,154 @@
       }
     }
 
-    // Format user information for display
+    // Format user information for Facebook-style display
     function formatUserInfo(user) {
-      if (!user) return 'No user information available';
+      if (!user) return;
 
-      const sections = [];
-
-      // User Details
-      if (user.name || user.given_name || user.family_name || user.email || user.picture) {
-        sections.push(`<div style="margin-bottom: 20px;">
-          <h3 style="color: #2c3e50; margin-bottom: 10px;">👤 User Details</h3>
-          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
-            ${user.name ? `<div><strong>Name:</strong> ${user.name}</div>` : ''}
-            ${user.given_name ? `<div><strong>First Name:</strong> ${user.given_name}</div>` : ''}
-            ${user.family_name ? `<div><strong>Last Name:</strong> ${user.family_name}</div>` : ''}
-            ${user.email ? `<div><strong>Email:</strong> ${user.email}</div>` : ''}
-            ${user.picture ? `<div><strong>Picture:</strong> <img src="${user.picture}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%; vertical-align: middle; margin-left: 8px;"></div>` : ''}
-          </div>
-        </div>`);
+      // Update profile header
+      document.getElementById('profileName').textContent = user.name || 'Unknown User';
+      document.getElementById('profileEmail').textContent = user.email || '';
+      
+      // Update profile picture
+      const profilePicture = document.getElementById('profilePicture');
+      if (user.picture) {
+        profilePicture.innerHTML = `<img src="${user.picture}" alt="Profile Picture">`;
       }
 
-      // Identity Provider Info
+      // About section
+      const aboutContent = document.getElementById('aboutContent');
+      aboutContent.innerHTML = `
+        <div class="info-item">
+          <div class="info-icon">👤</div>
+          <div class="info-content">
+            <div class="info-label">Full Name</div>
+            <div class="info-value">${user.name || 'Not provided'}</div>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">📧</div>
+          <div class="info-content">
+            <div class="info-label">Email</div>
+            <div class="info-value">${user.email || 'Not provided'}</div>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">🆔</div>
+          <div class="info-content">
+            <div class="info-label">User ID</div>
+            <div class="info-value">${user.user_id || user.sub || 'Not available'}</div>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">📅</div>
+          <div class="info-content">
+            <div class="info-label">Member Since</div>
+            <div class="info-value">${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Not available'}</div>
+          </div>
+        </div>
+      `;
+
+      // Statistics section
+      const statsContent = document.getElementById('statsContent');
+      const loginCount = user.logins_count || 0;
+      const lastLogin = user.last_login ? new Date(user.last_login) : null;
+      const daysSinceCreation = user.created_at ? Math.floor((Date.now() - new Date(user.created_at)) / (1000 * 60 * 60 * 24)) : 0;
+
+      statsContent.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-number">${loginCount}</span>
+            <div class="stat-label">Total Logins</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">${daysSinceCreation}</span>
+            <div class="stat-label">Days Active</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">${lastLogin ? Math.floor((Date.now() - lastLogin) / (1000 * 60 * 60 * 24)) : 0}</span>
+            <div class="stat-label">Days Since Login</div>
+          </div>
+        </div>
+      `;
+
+      // Identity Provider section
+      const identityContent = document.getElementById('identityContent');
       if (user.identities && user.identities.length > 0) {
         const identity = user.identities[0];
-        sections.push(`<div style="margin-bottom: 20px;">
-          <h3 style="color: #2c3e50; margin-bottom: 10px;">🔗 Identity Provider</h3>
-          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #764ba2;">
-            <div><strong>Provider:</strong> ${identity.provider}</div>
-            <div><strong>Connection:</strong> ${identity.connection}</div>
-            <div><strong>Social Login:</strong> ${identity.isSocial ? 'Yes' : 'No'}</div>
+        identityContent.innerHTML = `
+          <div class="info-item">
+            <div class="info-icon">🔗</div>
+            <div class="info-content">
+              <div class="info-label">Provider</div>
+              <div class="info-value">${identity.provider}</div>
+            </div>
           </div>
-        </div>`);
+          <div class="info-item">
+            <div class="info-icon">🌐</div>
+            <div class="info-content">
+              <div class="info-label">Connection</div>
+              <div class="info-value">${identity.connection}</div>
+            </div>
+          </div>
+          <div class="info-item">
+            <div class="info-icon">👥</div>
+            <div class="info-content">
+              <div class="info-label">Social Login</div>
+              <div class="info-value">${identity.isSocial ? 'Yes' : 'No'}</div>
+            </div>
+          </div>
+        `;
       }
 
-      // Login Statistics
-      if (user.logins_count !== undefined || user.last_login || user.created_at) {
-        sections.push(`<div style="margin-bottom: 20px;">
-          <h3 style="color: #2c3e50; margin-bottom: 10px;">📊 Login Statistics</h3>
-          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
-            ${user.logins_count !== undefined ? `<div><strong>Login Count:</strong> ${user.logins_count}</div>` : ''}
-            ${user.last_login ? `<div><strong>Last Login:</strong> ${new Date(user.last_login).toLocaleString()}</div>` : ''}
-            ${user.created_at ? `<div><strong>Account Created:</strong> ${new Date(user.created_at).toLocaleString()}</div>` : ''}
+      // Security section
+      const securityContent = document.getElementById('securityContent');
+      securityContent.innerHTML = `
+        <div class="info-item">
+          <div class="info-icon">✅</div>
+          <div class="info-content">
+            <div class="info-label">Email Verification</div>
+            <div class="info-value">
+              <span class="${user.email_verified ? 'verified-badge' : 'unverified-badge'}">
+                ${user.email_verified ? '✅ Verified' : '❌ Not Verified'}
+              </span>
+            </div>
           </div>
-        </div>`);
-      }
-
-      // Verification Status
-      if (user.email_verified !== undefined) {
-        sections.push(`<div style="margin-bottom: 20px;">
-          <h3 style="color: #2c3e50; margin-bottom: 10px;">✅ Verification Status</h3>
-          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${user.email_verified ? '#28a745' : '#dc3545'};">
-            <div><strong>Email Verified:</strong> ${user.email_verified ? '✅ Yes' : '❌ No'}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">🕒</div>
+          <div class="info-content">
+            <div class="info-label">Last Login</div>
+            <div class="info-value">${lastLogin ? lastLogin.toLocaleString() : 'Never'}</div>
           </div>
-        </div>`);
-      }
+        </div>
+        <div class="info-item">
+          <div class="info-icon">🌍</div>
+          <div class="info-content">
+            <div class="info-label">Last IP</div>
+            <div class="info-value">${user.last_ip || 'Not available'}</div>
+          </div>
+        </div>
+      `;
 
-      // Raw Data (collapsible)
-      sections.push(`<details style="margin-top: 20px;">
-        <summary style="cursor: pointer; font-weight: bold; color: #6c757d;">🔍 Raw User Data</summary>
-        <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 12px; overflow-x: auto;">${JSON.stringify(user, null, 2)}</pre>
-      </details>`);
-
-      return sections.join('');
+      // Raw data
+      document.getElementById('rawDataContent').textContent = JSON.stringify(user, null, 2);
     }
 
     // Update UI based on authentication state
     async function updateUI() {
       try {
         elements.loading.style.display = "none";
-        elements.authButtons.style.display = "block";
 
         const isAuthenticated = await auth0Client.isAuthenticated();
 
         if (isAuthenticated) {
-          // User is logged in
-          elements.loginButton.style.display = "none";
-          elements.logoutButton.style.display = "inline-block";
+          // User is logged in - show profile layout
+          elements.authButtons.style.display = "none";
+          document.getElementById('profileHeader').style.display = "block";
+          document.getElementById('contentArea').style.display = "grid";
+          document.getElementById('logoutButton').style.display = "inline-block";
           
-          showStatus("🎉 You are authenticated!", true);
+          showStatus("🎉 Welcome to your profile!", true);
 
           try {
             const user = await auth0Client.getUser();
@@ -316,19 +667,20 @@
             // Fetch detailed user info from mgmt-user function
             const detailedUser = await fetchDetailedUserInfo(user.sub);
             
-            elements.userInfo.style.display = "block";
-            elements.userInfo.innerHTML = formatUserInfo(detailedUser || user);
+            // Format and display user info in Facebook-style layout
+            formatUserInfo(detailedUser || user);
           } catch (userError) {
             showError("Failed to fetch user information", userError);
           }
 
         } else {
-          // User is not logged in
+          // User is not logged in - show login button
+          elements.authButtons.style.display = "flex";
           elements.loginButton.style.display = "inline-block";
-          elements.logoutButton.style.display = "none";
-          elements.userInfo.style.display = "none";
+          document.getElementById('profileHeader').style.display = "none";
+          document.getElementById('contentArea').style.display = "none";
           
-          showStatus("Please log in to continue", false);
+          showStatus("Please log in to view your profile", false);
         }
 
       } catch (error) {
