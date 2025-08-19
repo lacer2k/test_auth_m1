@@ -216,6 +216,85 @@
       }
     }
 
+    // Fetch detailed user info from mgmt-user function
+    async function fetchDetailedUserInfo(userId) {
+      try {
+        const response = await fetch(`/.netlify/functions/mgmt-user?user_id=${encodeURIComponent(userId)}`);
+        if (response.ok) {
+          return await response.json();
+        }
+        console.warn('Failed to fetch detailed user info:', response.status);
+        return null;
+      } catch (error) {
+        console.warn('Error fetching detailed user info:', error);
+        return null;
+      }
+    }
+
+    // Format user information for display
+    function formatUserInfo(user) {
+      if (!user) return 'No user information available';
+
+      const sections = [];
+
+      // User Details
+      if (user.name || user.given_name || user.family_name || user.email || user.picture) {
+        sections.push(`<div style="margin-bottom: 20px;">
+          <h3 style="color: #2c3e50; margin-bottom: 10px;">👤 User Details</h3>
+          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+            ${user.name ? `<div><strong>Name:</strong> ${user.name}</div>` : ''}
+            ${user.given_name ? `<div><strong>First Name:</strong> ${user.given_name}</div>` : ''}
+            ${user.family_name ? `<div><strong>Last Name:</strong> ${user.family_name}</div>` : ''}
+            ${user.email ? `<div><strong>Email:</strong> ${user.email}</div>` : ''}
+            ${user.picture ? `<div><strong>Picture:</strong> <img src="${user.picture}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%; vertical-align: middle; margin-left: 8px;"></div>` : ''}
+          </div>
+        </div>`);
+      }
+
+      // Identity Provider Info
+      if (user.identities && user.identities.length > 0) {
+        const identity = user.identities[0];
+        sections.push(`<div style="margin-bottom: 20px;">
+          <h3 style="color: #2c3e50; margin-bottom: 10px;">🔗 Identity Provider</h3>
+          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #764ba2;">
+            <div><strong>Provider:</strong> ${identity.provider}</div>
+            <div><strong>Connection:</strong> ${identity.connection}</div>
+            <div><strong>Social Login:</strong> ${identity.isSocial ? 'Yes' : 'No'}</div>
+          </div>
+        </div>`);
+      }
+
+      // Login Statistics
+      if (user.logins_count !== undefined || user.last_login || user.created_at) {
+        sections.push(`<div style="margin-bottom: 20px;">
+          <h3 style="color: #2c3e50; margin-bottom: 10px;">📊 Login Statistics</h3>
+          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+            ${user.logins_count !== undefined ? `<div><strong>Login Count:</strong> ${user.logins_count}</div>` : ''}
+            ${user.last_login ? `<div><strong>Last Login:</strong> ${new Date(user.last_login).toLocaleString()}</div>` : ''}
+            ${user.created_at ? `<div><strong>Account Created:</strong> ${new Date(user.created_at).toLocaleString()}</div>` : ''}
+          </div>
+        </div>`);
+      }
+
+      // Verification Status
+      if (user.email_verified !== undefined) {
+        sections.push(`<div style="margin-bottom: 20px;">
+          <h3 style="color: #2c3e50; margin-bottom: 10px;">✅ Verification Status</h3>
+          <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${user.email_verified ? '#28a745' : '#dc3545'};">
+            <div><strong>Email Verified:</strong> ${user.email_verified ? '✅ Yes' : '❌ No'}</div>
+          </div>
+        </div>`);
+      }
+
+      // Raw Data (collapsible)
+      sections.push(`<details style="margin-top: 20px;">
+        <summary style="cursor: pointer; font-weight: bold; color: #6c757d;">🔍 Raw User Data</summary>
+        <pre style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 12px; overflow-x: auto;">${JSON.stringify(user, null, 2)}</pre>
+      </details>`);
+
+      return sections.join('');
+    }
+
     // Update UI based on authentication state
     async function updateUI() {
       try {
@@ -233,8 +312,12 @@
 
           try {
             const user = await auth0Client.getUser();
+            
+            // Fetch detailed user info from mgmt-user function
+            const detailedUser = await fetchDetailedUserInfo(user.sub);
+            
             elements.userInfo.style.display = "block";
-            elements.userInfo.textContent = JSON.stringify(user, null, 2);
+            elements.userInfo.innerHTML = formatUserInfo(detailedUser || user);
           } catch (userError) {
             showError("Failed to fetch user information", userError);
           }
